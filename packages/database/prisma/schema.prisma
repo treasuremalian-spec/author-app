@@ -1,0 +1,776 @@
+// Author App -- database schema
+// This file is the single blueprint for every piece of data the app stores.
+// Organized by section so it's easy to scan even without a database background.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// 1. ACCOUNTS, PROFILES & PRESENCE
+// ---------------------------------------------------------------------------
+
+// One row per login. The id matches the id Supabase Auth assigns when someone
+// signs up, so this table is the bridge between "who's logged in" and
+// "everything we know about them."
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile AuthorProfile?
+
+  subscription Subscription?
+
+  projects       Project[]
+  series         Series[]
+  collaborations Collaborator[]
+
+  friendshipsInitiated Friendship[] @relation("FriendshipUserA")
+  friendshipsReceived  Friendship[] @relation("FriendshipUserB")
+
+  sprintsCreated      Sprint[]           @relation("SprintCreator")
+  sprintParticipation SprintParticipant[]
+
+  circleMemberships CircleMember[]
+  writingGoals      WritingGoal[]
+  dailyStats        DailyWritingStat[]
+  achievements      UserAchievement[]
+  notifications     Notification[]
+  mediaAssets       MediaAsset[]
+
+  @@map("users")
+}
+
+enum PresenceStatus {
+  ONLINE
+  WRITING
+  SPRINTING
+  BUSY
+  INVISIBLE
+}
+
+// The public-facing profile -- what other authors see, subject to privacy settings.
+model AuthorProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String
+  username    String   @unique
+  avatarUrl   String?
+  bio         String?
+  genres      String[] @default([])
+
+  presenceStatus PresenceStatus @default(INVISIBLE)
+  presenceUpdatedAt DateTime?    @default(now())
+
+  // Who can see what -- kept as a flexible JSON block so new privacy toggles
+  // (e.g. "show my streak", "show my library") don't need schema changes.
+  privacySettings Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("author_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// 2. SUBSCRIPTIONS -- modeled from day one, even though billing isn't live yet
+// ---------------------------------------------------------------------------
+
+enum PlanTier {
+  FREE
+  WRITER
+  AUTHOR_PRO
+}
+
+// The catalog of plans. "features" is a flexible JSON block (limits + flags)
+// so pricing/limits can change without touching code.
+model SubscriptionPlan {
+  id       String   @id @default(cuid())
+  tier     PlanTier @unique
+  name     String
+  priceUsd Int // cents per month; 0 for Free
+  features Json     @default("{}")
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodEnd     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// 3. LIBRARY -- series & projects (books)
+// ---------------------------------------------------------------------------
+
+model Series {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+
+  projects Project[]
+  theme    Theme?    @relation("SeriesStyle")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("series")
+}
+
+enum ProjectStatus {
+  IDEA
+  PLANNING
+  DRAFTING
+  REVISING
+  EDITING
+  FORMATTING
+  COMPLETED
+  PUBLISHED
+  ARCHIVED
+}
+
+model Project {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  seriesId       String?
+  series         Series? @relation(fields: [seriesId], references: [id])
+  seriesPosition Int?
+
+  title        String
+  coverImageUrl String?
+  status       ProjectStatus @default(IDEA)
+  genres       String[]      @default([])
+
+  targetWordCount Int?
+  lastEditedNodeId String? // powers the "Continue Writing" button
+
+  manuscriptNodes  ManuscriptNode[]
+  characters       Character[]
+  locations        Location[]
+  storyBibleEntries StoryBibleEntry[]
+  plotBoardCards   PlotBoardCard[]
+  collaborators    Collaborator[]
+  writingGoals     WritingGoal[]
+  dailyStats       DailyWritingStat[]
+  exports          Export[]
+  mediaAssets      MediaAsset[]
+
+  themeId String?
+  theme   Theme?  @relation(fields: [themeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("projects")
+}
+
+// ---------------------------------------------------------------------------
+// 4. MANUSCRIPT -- Part / Chapter / Scene as one flexible tree
+// ---------------------------------------------------------------------------
+
+enum ManuscriptNodeType {
+  PART
+  CHAPTER
+  SCENE
+}
+
+// A single self-referential table for the whole Book -> Part -> Chapter -> Scene
+// tree. Using one flexible table (instead of three rigid ones) means the
+// hierarchy can be reorganized (including drag-and-drop) without redesigning
+// the database later.
+model ManuscriptNode {
+  id        String              @id @default(cuid())
+  projectId String
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   ManuscriptNode?  @relation("NodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children ManuscriptNode[] @relation("NodeChildren")
+
+  type       ManuscriptNodeType
+  title      String
+  orderIndex Int
+
+  // Present only when type = SCENE
+  scene Scene?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, parentId, orderIndex])
+  @@map("manuscript_nodes")
+}
+
+enum SceneStatus {
+  PLANNED
+  DRAFTING
+  WRITTEN
+  REVISING
+  COMPLETE
+}
+
+// The actual writing, plus the planning metadata that helps the author but
+// never appears in the exported book.
+model Scene {
+  id     String         @id @default(cuid())
+  nodeId String         @unique
+  node   ManuscriptNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  content Json @default("{}") // Tiptap/ProseMirror document JSON
+  wordCount Int @default(0)
+
+  povCharacterId String?
+  povCharacter   Character? @relation(fields: [povCharacterId], references: [id])
+  locationId     String?
+  location       Location?  @relation(fields: [locationId], references: [id])
+
+  storyDate       String? // free text -- "Day 3", "1847", etc.
+  status          SceneStatus @default(PLANNED)
+  purpose         String?
+  plotline        String?
+  notes           String?
+  targetWordCount Int?
+
+  characterIds String[] @default([]) // other characters appearing in the scene
+
+  versions SceneVersion[]
+
+  updatedAt DateTime @updatedAt
+
+  @@map("scenes")
+}
+
+// Periodic full snapshots -- simple, restorable version history (not diffing).
+model SceneVersion {
+  id      String @id @default(cuid())
+  sceneId String
+  scene   Scene  @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  content   Json
+  wordCount Int
+  savedById String?
+  createdAt DateTime @default(now())
+
+  @@index([sceneId, createdAt])
+  @@map("scene_versions")
+}
+
+// ---------------------------------------------------------------------------
+// 5. STORY BIBLE -- characters, locations, worldbuilding, ideas, mood boards
+// ---------------------------------------------------------------------------
+
+model Character {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  nickname    String?
+  photoUrl    String?
+  age         String?
+  birthday    String?
+  appearance  String?
+  personality String?
+  occupation  String?
+  family      String?
+  backstory   String?
+  goals       String?
+  motivation  String?
+  fears       String?
+  secrets     String?
+  likesDislikes String?
+  arc         String?
+  dialogueStyle String?
+  notes       String?
+
+  // Author-defined extra fields, e.g. { "zodiac sign": "Scorpio" }
+  customFields Json @default("{}")
+
+  povScenes Scene[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("characters")
+}
+
+model Location {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  notes       String?
+  customFields Json @default("{}")
+
+  scenes Scene[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("locations")
+}
+
+enum StoryBibleEntryType {
+  ORGANIZATION
+  FAMILY
+  BUSINESS
+  OBJECT
+  WORLDBUILDING
+  TERMINOLOGY
+  RULE
+  HISTORICAL_EVENT
+  RESEARCH
+  FACT
+  IDEA          // Idea Vault items -- projectId may be null until assigned
+  TITLE_IDEA
+  DIALOGUE_SNIPPET
+  QUOTE
+  SCENE_IDEA
+  PLOT_TWIST
+}
+
+// A flexible catch-all for the less rigidly-structured Story Bible content
+// and the Idea Vault, so every new content type doesn't need its own table.
+model StoryBibleEntry {
+  id        String  @id @default(cuid())
+  // Null projectId = lives in the author's global Idea Vault, not yet
+  // assigned to a book.
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId  String? // owner when projectId is null (idea vault)
+
+  type         StoryBibleEntryType
+  title        String
+  body         String?
+  customFields Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, type])
+  @@map("story_bible_entries")
+}
+
+// ---------------------------------------------------------------------------
+// 6. VISUAL PLOT BOARD
+// ---------------------------------------------------------------------------
+
+model PlotBoardCard {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title      String
+  column     String // e.g. "Act I", "Drafting" -- author-defined column name
+  orderIndex Int
+  colorTag   String?
+  sceneId    String? // optional link to a manuscript scene
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, column, orderIndex])
+  @@map("plot_board_cards")
+}
+
+// ---------------------------------------------------------------------------
+// 7. MEDIA -- covers, mood board images, character/location photos
+// ---------------------------------------------------------------------------
+
+enum MediaAttachedToType {
+  PROJECT
+  CHARACTER
+  LOCATION
+  SCENE
+  STORY_BIBLE_ENTRY
+  MOOD_BOARD
+}
+
+model MediaAsset {
+  id        String  @id @default(cuid())
+  ownerId   String
+  owner     User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  url            String
+  altText        String?
+  attachedToType MediaAttachedToType
+  attachedToId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, attachedToType, attachedToId])
+  @@map("media_assets")
+}
+
+// ---------------------------------------------------------------------------
+// 8. COLLABORATION -- the ONLY path to manuscript access
+// ---------------------------------------------------------------------------
+
+enum CollaboratorRole {
+  VIEW_ONLY
+  BETA_READER
+  COMMENTER
+  EDITOR
+  CO_AUTHOR
+}
+
+enum CollaboratorStatus {
+  INVITED
+  ACCEPTED
+  REVOKED
+}
+
+// This table is deliberately the *only* way a user other than the owner can
+// read a project's manuscript. Friendship and sprint participation never
+// grant access on their own.
+model Collaborator {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role   CollaboratorRole
+  status CollaboratorStatus @default(INVITED)
+
+  invitedAt DateTime @default(now())
+  respondedAt DateTime?
+
+  @@unique([projectId, userId])
+  @@map("collaborators")
+}
+
+// ---------------------------------------------------------------------------
+// 9. SOCIAL -- friends, circles
+// ---------------------------------------------------------------------------
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+// Deliberately has zero relation to Collaborator -- being friends never
+// grants manuscript access.
+model Friendship {
+  id String @id @default(cuid())
+
+  userIdA String
+  userA   User   @relation("FriendshipUserA", fields: [userIdA], references: [id], onDelete: Cascade)
+  userIdB String
+  userB   User   @relation("FriendshipUserB", fields: [userIdB], references: [id], onDelete: Cascade)
+
+  status    FriendshipStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+
+  @@unique([userIdA, userIdB])
+  @@map("friendships")
+}
+
+model WritingCircle {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+
+  members     CircleMember[]
+  createdAt   DateTime       @default(now())
+
+  @@map("writing_circles")
+}
+
+enum CircleRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+model CircleMember {
+  id      String        @id @default(cuid())
+  circleId String
+  circle  WritingCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role     CircleRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  @@unique([circleId, userId])
+  @@map("circle_members")
+}
+
+// ---------------------------------------------------------------------------
+// 10. WRITING SPRINTS -- stats only, never manuscript content
+// ---------------------------------------------------------------------------
+
+enum SprintType {
+  SOLO
+  FRIEND
+  GROUP
+  CIRCLE
+}
+
+enum SprintStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELED
+}
+
+model Sprint {
+  id        String @id @default(cuid())
+  creatorId String
+  creator   User   @relation("SprintCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  type           SprintType
+  status         SprintStatus @default(SCHEDULED)
+  durationMinutes Int
+  wordGoal       Int?
+  circleId       String?
+
+  scheduledStart DateTime?
+  startedAt      DateTime?
+  endedAt        DateTime?
+
+  participants SprintParticipant[]
+
+  createdAt DateTime @default(now())
+
+  @@map("sprints")
+}
+
+// This table structurally can never hold manuscript text -- only numbers.
+model SprintParticipant {
+  id       String @id @default(cuid())
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startingWordCount Int  @default(0)
+  currentWordCount  Int  @default(0)
+  endingWordCount   Int?
+  joinedAt          DateTime @default(now())
+
+  @@unique([sprintId, userId])
+  @@map("sprint_participants")
+}
+
+// ---------------------------------------------------------------------------
+// 11. PRODUCTIVITY -- goals, daily stats, achievements
+// ---------------------------------------------------------------------------
+
+enum GoalType {
+  DAILY_WORDS
+  WEEKLY_WORDS
+  MANUSCRIPT_TOTAL
+  DEADLINE
+  CHAPTER_TARGET
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  MISSED
+  ARCHIVED
+}
+
+model WritingGoal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  type        GoalType
+  label       String
+  targetValue Int
+  deadline    DateTime?
+  status      GoalStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("writing_goals")
+}
+
+// One row per user per day -- powers word-count charts and streaks without
+// recomputing from every scene on every page load.
+model DailyWritingStat {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  date      DateTime @db.Date
+  wordCount Int      @default(0)
+
+  @@unique([userId, projectId, date])
+  @@map("daily_writing_stats")
+}
+
+enum AchievementKey {
+  WORDS_1K
+  WORDS_10K
+  WORDS_50K
+  WORDS_100K
+  FIRST_CHAPTER_COMPLETE
+  STREAK_7_DAY
+  STREAK_30_DAY
+  MANUSCRIPT_COMPLETE
+  FIRST_SPRINT
+  FIRST_EXPORT
+}
+
+model UserAchievement {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  key       AchievementKey
+  earnedAt  DateTime       @default(now())
+
+  @@unique([userId, key])
+  @@map("user_achievements")
+}
+
+// ---------------------------------------------------------------------------
+// 12. NOTIFICATIONS
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  FRIEND_REQUEST
+  SPRINT_INVITE
+  CIRCLE_INVITE
+  COMMENT
+  BETA_FEEDBACK
+  ACHIEVEMENT
+  GOAL_REMINDER
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  payload Json              @default("{}")
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// 13. FORMATTING STUDIO -- themes & exports
+// ---------------------------------------------------------------------------
+
+enum ThemeCategory {
+  CONTEMPORARY_ROMANCE
+  URBAN_FICTION
+  DARK_ROMANCE
+  FANTASY
+  MINIMAL
+  CLASSIC
+  LUXURY
+  NONFICTION
+}
+
+model Theme {
+  id       String        @id @default(cuid())
+  name     String
+  category ThemeCategory
+  isSystem Boolean       @default(true) // built-in vs. author-customized
+
+  // Typography/layout config: fonts, sizes, margins, drop caps, ornaments, etc.
+  config Json @default("{}")
+
+  projects Project[]
+
+  // A theme can be saved as a series-wide "Series Style"
+  seriesId String? @unique
+  series   Series? @relation("SeriesStyle", fields: [seriesId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("themes")
+}
+
+enum ExportType {
+  EPUB
+  PRINT_PDF
+  PROOF_PDF
+  DOCX
+}
+
+enum ExportStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Export {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  type    ExportType
+  status  ExportStatus @default(QUEUED)
+  themeId String?
+  fileUrl String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+
+  @@map("exports")
+}
