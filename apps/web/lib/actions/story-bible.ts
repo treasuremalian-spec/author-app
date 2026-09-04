@@ -72,29 +72,112 @@ export async function deleteCharacter(characterId: string, projectId: string) {
 // Locations
 // ---------------------------------------------------------------------------
 
-export async function listLocations(projectId: string) {
+// The richer worldbuilding sections (inspired by the "A Whole New World" page
+// in Tasia's Notion Writer's Bible template) live inside Location's existing
+// `customFields` JSON column rather than as their own migration-requiring
+// columns -- one flexible blob keyed by section.
+export const LOCATION_WORLDBUILDING_SECTIONS = [
+  {
+    key: "geography",
+    label: "Geography & environment",
+    placeholder: "Landmarks, climate, terrain, ecosystems -- what does the physical world look and feel like?",
+  },
+  {
+    key: "historyCulture",
+    label: "History & culture",
+    placeholder: "Major events, traditions and practices, languages, religion.",
+  },
+  {
+    key: "societyPolitics",
+    label: "Society & politics",
+    placeholder: "Government, social hierarchy, political factions and entities, laws.",
+  },
+  {
+    key: "economyTechnology",
+    label: "Economy & technology",
+    placeholder: "Economic systems, tech level, magic systems (if any), major industries.",
+  },
+  {
+    key: "dailyLife",
+    label: "Daily life & social customs",
+    placeholder: "Everyday routines, housing, food, clothing, entertainment.",
+  },
+  {
+    key: "inspiration",
+    label: "Inspiration",
+    placeholder: "Reference links, mood, or real places/images this is inspired by.",
+  },
+] as const;
+
+export type LocationWorldbuildingKey = (typeof LOCATION_WORLDBUILDING_SECTIONS)[number]["key"];
+export type LocationWorldbuilding = Partial<Record<LocationWorldbuildingKey, string | null>>;
+
+function parseWorldbuilding(raw: unknown): LocationWorldbuilding {
+  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const result: LocationWorldbuilding = {};
+  for (const section of LOCATION_WORLDBUILDING_SECTIONS) {
+    const value = source[section.key];
+    result[section.key] = typeof value === "string" ? value : null;
+  }
+  return result;
+}
+
+export interface LocationRow {
+  id: string;
+  name: string;
+  description: string | null;
+  notes: string | null;
+  worldbuilding: LocationWorldbuilding;
+}
+
+export async function listLocations(projectId: string): Promise<LocationRow[]> {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  return prisma.location.findMany({
+  const locations = await prisma.location.findMany({
     where: { projectId },
     orderBy: { name: "asc" },
   });
+
+  type LocationRowLike = {
+    id: string;
+    name: string;
+    description: string | null;
+    notes: string | null;
+    customFields: unknown;
+  };
+
+  return (locations as LocationRowLike[]).map((l) => ({
+    id: l.id,
+    name: l.name,
+    description: l.description,
+    notes: l.notes,
+    worldbuilding: parseWorldbuilding(l.customFields),
+  }));
 }
 
-export async function createLocation(projectId: string, name: string) {
+export async function createLocation(projectId: string, name: string): Promise<LocationRow> {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  return prisma.location.create({
+  const location = await prisma.location.create({
     data: { projectId, name: name.trim() || "New location" },
   });
+
+  return {
+    id: location.id,
+    name: location.name,
+    description: location.description,
+    notes: location.notes,
+    worldbuilding: parseWorldbuilding(location.customFields),
+  };
 }
 
 export interface LocationUpdateData {
   name?: string;
   description?: string | null;
   notes?: string | null;
+  worldbuilding?: LocationWorldbuilding;
 }
 
 export async function updateLocation(
@@ -105,7 +188,15 @@ export async function updateLocation(
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.location.update({ where: { id: locationId }, data });
+  const { worldbuilding, ...rest } = data;
+
+  await prisma.location.update({
+    where: { id: locationId },
+    data: {
+      ...rest,
+      ...(worldbuilding !== undefined ? { customFields: worldbuilding } : {}),
+    },
+  });
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 

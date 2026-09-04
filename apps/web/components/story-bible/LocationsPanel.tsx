@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MapPin, Plus, Trash2 } from "lucide-react";
+import { Globe2, MapPin, Plus, Trash2 } from "lucide-react";
 
 import {
   createLocation,
   deleteLocation,
   updateLocation,
+  LOCATION_WORLDBUILDING_SECTIONS,
   type LocationUpdateData,
+  type LocationWorldbuilding,
+  type LocationWorldbuildingKey,
 } from "@/lib/actions/story-bible";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -19,6 +22,25 @@ export interface LocationRow extends LocationUpdateData {
 }
 
 const SAVE_DELAY_MS = 900;
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Textarea rows={3} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
 
 export function LocationsPanel({
   projectId,
@@ -132,8 +154,7 @@ function LocationDetail({
     };
   }, []);
 
-  function set(field: keyof LocationUpdateData, value: string) {
-    onChange(location.id, { [field]: value } as Partial<LocationRow>);
+  function scheduleSave() {
     setStatus("saving");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -142,8 +163,20 @@ function LocationDetail({
         name: l.name,
         description: l.description || null,
         notes: l.notes || null,
+        worldbuilding: l.worldbuilding,
       }).finally(() => setStatus("saved"));
     }, SAVE_DELAY_MS);
+  }
+
+  function set(field: "name" | "description" | "notes", value: string) {
+    onChange(location.id, { [field]: value } as Partial<LocationRow>);
+    scheduleSave();
+  }
+
+  function setWorld(key: LocationWorldbuildingKey, value: string) {
+    const nextWorldbuilding: LocationWorldbuilding = { ...(location.worldbuilding ?? {}), [key]: value };
+    onChange(location.id, { worldbuilding: nextWorldbuilding });
+    scheduleSave();
   }
 
   return (
@@ -167,25 +200,43 @@ function LocationDetail({
         </button>
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label>Description</Label>
-          <Textarea
-            rows={5}
-            value={location.description ?? ""}
-            onChange={(e) => set("description", e.target.value)}
-            placeholder="What does this place look, sound, and feel like?"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Notes</Label>
-          <Textarea
-            rows={4}
-            value={location.notes ?? ""}
-            onChange={(e) => set("notes", e.target.value)}
-            placeholder="Anything else worth remembering -- who lives here, what happens here, continuity notes."
-          />
-        </div>
+      <div className="space-y-6">
+        <section className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">At a glance</p>
+          <div className="space-y-1.5">
+            <Label>Description</Label>
+            <Textarea
+              rows={5}
+              value={location.description ?? ""}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="What does this place look, sound, and feel like?"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Notes</Label>
+            <Textarea
+              rows={4}
+              value={location.notes ?? ""}
+              onChange={(e) => set("notes", e.target.value)}
+              placeholder="Anything else worth remembering -- who lives here, what happens here, continuity notes."
+            />
+          </div>
+        </section>
+
+        <section className="space-y-3 border-t border-border pt-5">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Globe2 className="size-3.5" /> Worldbuilding
+          </p>
+          {LOCATION_WORLDBUILDING_SECTIONS.map((section) => (
+            <Field
+              key={section.key}
+              label={section.label}
+              value={location.worldbuilding?.[section.key] ?? ""}
+              onChange={(v) => setWorld(section.key, v)}
+              placeholder={section.placeholder}
+            />
+          ))}
+        </section>
       </div>
     </div>
   );
