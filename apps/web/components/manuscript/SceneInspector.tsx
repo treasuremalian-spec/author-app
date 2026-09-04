@@ -106,20 +106,20 @@ export function SceneInspector({
         Scene details
       </p>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <div className="space-y-1.5">
           <Label>Status</Label>
           <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(STATUS_LABEL) as SceneStatusValue[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => handleStatusChange(s)}
-                className={scene.status === s ? "" : "opacity-50 transition-opacity hover:opacity-100"}
-              >
-                <Badge variant={STATUS_BADGE_VARIANT[s]}>{STATUS_LABEL[s]}</Badge>
-              </button>
-            ))}
+            {(Object.keys(STATUS_LABEL) as SceneStatusValue[]).map((s) => {
+              const isActive = scene.status === s;
+              return (
+                <button key={s} type="button" onClick={() => handleStatusChange(s)}>
+                  <Badge variant={isActive ? STATUS_BADGE_VARIANT[s] : "outline"}>
+                    {STATUS_LABEL[s]}
+                  </Badge>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -171,9 +171,11 @@ export function SceneInspector({
           <button
             type="button"
             onClick={loadVersions}
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"
           >
-            <History className="size-3.5" />
+            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <History className="size-3.5" />
+            </span>
             Version history
           </button>
 
@@ -190,7 +192,7 @@ export function SceneInspector({
               {versions.map((v) => (
                 <li
                   key={v.id}
-                  className="flex items-center justify-between rounded-md border border-border px-2.5 py-1.5 text-xs"
+                  className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-xs"
                 >
                   <span className="text-muted-foreground">
                     {timeAgo(v.createdAt)} · {v.wordCount.toLocaleString()} words

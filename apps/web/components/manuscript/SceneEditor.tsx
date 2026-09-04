@@ -74,15 +74,28 @@ export function SceneEditor({
   if (!editor) return null;
 
   return (
-    <div className={cn("flex h-full flex-col bg-background", focusMode && "fixed inset-0 z-40")}>
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
+    <div className={cn("flex h-full flex-col bg-muted/30", focusMode && "fixed inset-0 z-40 bg-muted/50")}>
+      <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <p className="truncate font-display text-base font-semibold">{title}</p>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-          <span className="w-12 text-right">{status === "saving" ? "Saving…" : "Saved"}</span>
+        <div className="flex shrink-0 items-center gap-3 text-xs">
+          <span
+            className={cn(
+              "flex w-16 items-center justify-end gap-1 text-right",
+              status === "saving" ? "text-muted-foreground" : "text-success"
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                status === "saving" ? "animate-pulse bg-muted-foreground" : "bg-success"
+              )}
+            />
+            {status === "saving" ? "Saving…" : "Saved"}
+          </span>
           <button
             type="button"
             onClick={() => setFocusMode((f) => !f)}
-            className="flex items-center gap-1 hover:text-foreground"
+            className="flex items-center gap-1 text-muted-foreground hover:text-primary"
           >
             {focusMode ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
             {focusMode ? "Exit focus" : "Focus mode"}
@@ -93,7 +106,7 @@ export function SceneEditor({
       <EditorToolbar editor={editor} />
 
       <div className="flex-1 overflow-y-auto px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card px-8 py-10 shadow-sm sm:px-14 sm:py-14">
           <EditorContent editor={editor} />
         </div>
       </div>

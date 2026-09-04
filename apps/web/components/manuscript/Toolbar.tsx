@@ -40,8 +40,8 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40",
-        active && "bg-primary/10 text-primary"
+        "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
+        active && "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
       )}
     >
       {children}
@@ -55,7 +55,7 @@ function Divider() {
 
 export function EditorToolbar({ editor }: { editor: Editor }) {
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted/40 px-3 py-1.5">
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-secondary/40 px-3 py-1.5">
       <ToolbarButton
         label="Undo"
         onClick={() => editor.chain().focus().undo().run()}

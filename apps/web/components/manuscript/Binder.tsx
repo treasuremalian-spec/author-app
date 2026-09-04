@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,6 +66,12 @@ const ICONS: Record<NodeType, React.ElementType> = {
   SCENE: FileText,
 };
 
+const ICON_COLOR: Record<NodeType, string> = {
+  PART: "text-accent-foreground",
+  CHAPTER: "text-primary",
+  SCENE: "text-muted-foreground",
+};
+
 export function Binder({ nodes, selectedNodeId, ...handlers }: BinderProps) {
   const tree = buildTree(nodes);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -95,15 +100,18 @@ export function Binder({ nodes, selectedNodeId, ...handlers }: BinderProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-3 py-3">
+      <div className="flex items-center justify-between px-3 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Manuscript
         </p>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+            >
               <Plus className="size-4" />
-            </Button>
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => handlers.onAddNode(null, "PART")}>
@@ -116,11 +124,16 @@ export function Binder({ nodes, selectedNodeId, ...handlers }: BinderProps) {
         </DropdownMenu>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="flex-1 overflow-y-auto px-2 py-2 border-t border-border/60">
         {tree.length === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-            Nothing here yet -- use the + above to add your first part or chapter.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
+            <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <BookOpen className="size-4" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Nothing here yet -- use the + above to add your first part or chapter.
+            </p>
+          </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <NodeList nodes={tree} depth={0} selectedNodeId={selectedNodeId} handlers={handlers} />
@@ -205,8 +218,10 @@ function BinderNode({
     <li ref={setNodeRef} style={style}>
       <div
         className={cn(
-          "group flex items-center gap-1 rounded-md px-1 py-1 text-sm",
-          isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
+          "group flex items-center gap-1 rounded-lg border-l-2 px-1 py-1.5 text-sm transition-colors",
+          isSelected
+            ? "border-primary bg-primary/15 font-medium text-primary"
+            : "border-transparent hover:bg-background/80"
         )}
         style={{ paddingLeft: depth * 16 + 4 }}
       >
@@ -231,7 +246,7 @@ function BinderNode({
           <span className="w-3.5 shrink-0" />
         )}
 
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <Icon className={cn("size-3.5 shrink-0", isSelected ? "text-primary" : ICON_COLOR[node.type])} />
 
         {editing ? (
           <input
@@ -261,7 +276,9 @@ function BinderNode({
         )}
 
         {node.type === "SCENE" && (
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{words}</span>
+          <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+            {words}
+          </span>
         )}
 
         <DropdownMenu>

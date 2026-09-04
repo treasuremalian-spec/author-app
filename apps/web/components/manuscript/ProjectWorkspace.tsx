@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen, PenLine } from "lucide-react";
 
 import { Binder } from "./Binder";
 import { SceneEditor } from "./SceneEditor";
@@ -189,18 +189,25 @@ export function ProjectWorkspace({
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-border px-4 py-2.5">
-        <Link href="/library" className="text-muted-foreground hover:text-foreground">
+      <header className="relative flex items-center gap-3 border-b border-border bg-card px-4 py-3">
+        <Link
+          href="/library"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
           <ArrowLeft className="size-4" />
         </Link>
-        <p className="truncate font-display text-sm font-semibold">{projectTitle}</p>
-        <span className="ml-auto text-xs text-muted-foreground">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <BookOpen className="size-4" />
+        </div>
+        <p className="truncate font-display text-base font-semibold">{projectTitle}</p>
+        <span className="ml-auto shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent-foreground">
           {totalWords.toLocaleString()} words total
         </span>
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-primary/40 via-accent/40 to-transparent" />
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr_280px]">
-        <aside className="min-h-0 border-r border-border">
+        <aside className="min-h-0 border-r border-border bg-secondary/25">
           <Binder
             nodes={nodes}
             selectedNodeId={selectedNodeId}
@@ -215,7 +222,7 @@ export function ProjectWorkspace({
           />
         </aside>
 
-        <main className="min-h-0 min-w-0">
+        <main className="min-h-0 min-w-0 bg-muted/30">
           {selectedNode?.scene ? (
             <SceneEditor
               key={`${selectedNode.id}-${refreshToken}`}
@@ -226,13 +233,18 @@ export function ProjectWorkspace({
               onWordCountChange={handleWordCountChange}
             />
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Select a scene from the left, or add a new one, to start writing.
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <PenLine className="size-5" />
+              </div>
+              <p className="max-w-xs text-sm text-muted-foreground">
+                Select a scene from the left, or add a new one, to start writing.
+              </p>
             </div>
           )}
         </main>
 
-        <aside className="hidden min-h-0 border-l border-border lg:block">
+        <aside className="hidden min-h-0 border-l border-border bg-secondary/15 lg:block">
           {selectedNode?.scene && (
             <SceneInspector
               key={selectedNode.scene.id}

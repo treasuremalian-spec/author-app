@@ -95,9 +95,9 @@ export const STATUS_LABEL: Record<SceneStatusValue, string> = {
 
 export const STATUS_BADGE_VARIANT: Record<
   SceneStatusValue,
-  "outline" | "accent" | "default" | "success"
+  "secondary" | "accent" | "default" | "success"
 > = {
-  PLANNED: "outline",
+  PLANNED: "secondary",
   DRAFTING: "accent",
   WRITTEN: "default",
   REVISING: "accent",
