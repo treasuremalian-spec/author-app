@@ -2,14 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PrismaClient } from "@author-app/database";
-
-// One shared Prisma connection, reused across requests (the recommended
-// pattern in serverless/Next.js environments to avoid exhausting database
-// connections).
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+import { prisma } from "@author-app/database";
 
 export async function completeOnboarding(formData: FormData) {
   const supabase = await createClient();
