@@ -41,5 +41,5 @@ export async function completeOnboarding(formData: FormData) {
     update: { displayName, username, bio, genres },
   });
 
-  redirect("/dashboard");
+  redirect("/library");
 }
