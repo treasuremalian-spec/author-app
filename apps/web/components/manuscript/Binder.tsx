@@ -58,6 +58,7 @@ export interface BinderHandlers {
 interface BinderProps extends BinderHandlers {
   nodes: ManuscriptNodeData[];
   selectedNodeId: string | null;
+  totalWords: number;
 }
 
 const ICONS: Record<NodeType, React.ElementType> = {
@@ -72,7 +73,7 @@ const ICON_COLOR: Record<NodeType, string> = {
   SCENE: "text-muted-foreground",
 };
 
-export function Binder({ nodes, selectedNodeId, ...handlers }: BinderProps) {
+export function Binder({ nodes, selectedNodeId, totalWords, ...handlers }: BinderProps) {
   const tree = buildTree(nodes);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -101,9 +102,14 @@ export function Binder({ nodes, selectedNodeId, ...handlers }: BinderProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Manuscript
-        </p>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Manuscript
+          </p>
+          <p className="text-[11px] text-muted-foreground/80">
+            {totalWords.toLocaleString()} words total
+          </p>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

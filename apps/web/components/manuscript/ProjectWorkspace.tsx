@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, BookOpen, PenLine } from "lucide-react";
+import { PenLine } from "lucide-react";
 
 import { Binder } from "./Binder";
 import { SceneEditor } from "./SceneEditor";
@@ -24,14 +23,12 @@ import {
 
 interface ProjectWorkspaceProps {
   projectId: string;
-  projectTitle: string;
   initialNodes: ManuscriptNodeData[];
   characters: { id: string; name: string }[];
 }
 
 export function ProjectWorkspace({
   projectId,
-  projectTitle,
   initialNodes,
   characters,
 }: ProjectWorkspaceProps) {
@@ -188,29 +185,13 @@ export function ProjectWorkspace({
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="relative flex items-center gap-3 border-b border-border bg-card px-4 py-3">
-        <Link
-          href="/library"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-        </Link>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <BookOpen className="size-4" />
-        </div>
-        <p className="truncate font-display text-base font-semibold">{projectTitle}</p>
-        <span className="ml-auto shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent-foreground">
-          {totalWords.toLocaleString()} words total
-        </span>
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-primary/40 via-accent/40 to-transparent" />
-      </header>
-
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr_280px]">
+    <div className="h-full">
+      <div className="grid h-full min-h-0 grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr_280px]">
         <aside className="min-h-0 border-r border-border bg-secondary/25">
           <Binder
             nodes={nodes}
             selectedNodeId={selectedNodeId}
+            totalWords={totalWords}
             onSelect={setSelectedNodeId}
             onAddNode={handleAddNode}
             onRename={handleRename}

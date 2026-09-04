@@ -38,7 +38,6 @@ export default async function ProjectPage({
   return (
     <ProjectWorkspace
       projectId={project.id}
-      projectTitle={project.title}
       initialNodes={mappedNodes}
       characters={characters}
     />

@@ -2,31 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@author-app/database";
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
+import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
 
 // How long we let sit between autosave calls before we also stash a
 // restorable snapshot -- frequent enough that undo history is meaningful,
 // rare enough that we're not writing hundreds of snapshots a day.
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
-
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  return user;
-}
-
-async function assertProjectOwnership(projectId: string, userId: string) {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId },
-    select: { id: true },
-  });
-  if (!project) throw new Error("Project not found.");
-}
 
 function defaultTitle(type: "PART" | "CHAPTER" | "SCENE") {
   if (type === "PART") return "New Part";
@@ -311,4 +294,20 @@ export async function listProjectsWithStats() {
   );
 
   return withStats;
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight project info, shared by every tab in the project workspace
+// ---------------------------------------------------------------------------
+
+export async function getProjectMeta(projectId: string) {
+  const user = await requireUser();
+
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, userId: user.id },
+    select: { id: true, title: true },
+  });
+  if (!project) redirect("/library");
+
+  return project;
 }
