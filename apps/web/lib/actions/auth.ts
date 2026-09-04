@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@author-app/database";
 
 export async function signUp(formData: FormData) {
   const email = String(formData.get("email") || "");
@@ -28,13 +29,20 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") || "");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error, data } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/onboarding");
+  // Only send returning writers through onboarding once -- if they already
+  // have an author profile, skip straight to their library.
+  const userId = data.user?.id;
+  const existingProfile = userId
+    ? await prisma.authorProfile.findUnique({ where: { userId }, select: { userId: true } })
+    : null;
+
+  redirect(existingProfile ? "/library" : "/onboarding");
 }
 
 export async function signOut() {

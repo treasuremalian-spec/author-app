@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@author-app/database";
 import { completeOnboarding } from "@/lib/actions/onboarding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +14,24 @@ export default async function OnboardingPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
+
+  // Safety net: if this writer already has a profile (e.g. they navigated
+  // back to this page manually), don't make them redo it -- just send them
+  // on to their library.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const existingProfile = await prisma.authorProfile.findUnique({
+      where: { userId: user.id },
+      select: { userId: true },
+    });
+    if (existingProfile) {
+      redirect("/library");
+    }
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-6 py-12">
