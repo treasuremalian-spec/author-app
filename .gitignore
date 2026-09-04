@@ -9,3 +9,6 @@ node_modules/
 dist/
 build/
 .turbo/
+
+# Files delivered via chat land here automatically -- not part of the project
+Claude outputs/
