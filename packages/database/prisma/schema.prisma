@@ -180,6 +180,15 @@ model Project {
   targetWordCount Int?
   lastEditedNodeId String? // powers the "Continue Writing" button
 
+  // Book details -- the "command center" fields from Tasia's Notion
+  // template (synopsis, tropes, deadline vs. release date, a playlist link).
+  synopsis    String?
+  tropes      String[] @default([])
+  povAndTense String?
+  deadline    DateTime?
+  releaseDate DateTime?
+  playlistUrl String?
+
   manuscriptNodes  ManuscriptNode[]
   characters       Character[]
   locations        Location[]
@@ -190,6 +199,7 @@ model Project {
   dailyStats       DailyWritingStat[]
   exports          Export[]
   mediaAssets      MediaAsset[]
+  actionItems      ActionItem[]
 
   themeId String?
   theme   Theme?  @relation(fields: [themeId], references: [id])
@@ -771,4 +781,27 @@ model Export {
   completedAt DateTime?
 
   @@map("exports")
+}
+
+// ---------------------------------------------------------------------------
+// 14. ACTION ITEMS -- a lightweight per-book to-do board (separate from
+// scene status), inspired by the "Action items" board in Tasia's Notion
+// Writer's Bible template.
+// ---------------------------------------------------------------------------
+
+model ActionItem {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title      String
+  status     String @default("NO_STATUS") // NO_STATUS | IN_PROGRESS | COMPLETED | BACKBURNER | STUCK
+  notes      String?
+  orderIndex Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status, orderIndex])
+  @@map("action_items")
 }
