@@ -171,6 +171,18 @@ export function ProjectWorkspace({
     );
   }
 
+  // Keeps the in-memory copy of a scene's content current the moment it's
+  // edited (not just after the debounced autosave completes). Without this,
+  // switching away from a scene and back within the same session would show
+  // whatever was loaded when the page first opened, discarding everything
+  // typed since -- and typing further from that stale base would overwrite
+  // the real, already-saved content in the database.
+  function handleContentChange(sceneId: string, content: unknown) {
+    setNodes((prev) =>
+      prev.map((n) => (n.scene?.id === sceneId ? { ...n, scene: { ...n.scene!, content } } : n))
+    );
+  }
+
   function handleMetaChange(sceneId: string, patch: Partial<SceneData>) {
     setNodes((prev) =>
       prev.map((n) => (n.scene?.id === sceneId ? { ...n, scene: { ...n.scene!, ...patch } } : n))
@@ -212,6 +224,7 @@ export function ProjectWorkspace({
               title={selectedNode.title}
               initialContent={selectedNode.scene.content}
               onWordCountChange={handleWordCountChange}
+              onContentChange={handleContentChange}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

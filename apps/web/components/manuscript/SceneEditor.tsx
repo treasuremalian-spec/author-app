@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { EditorToolbar } from "./Toolbar";
 
 const AUTOSAVE_DELAY_MS = 1500;
+const RETRY_DELAY_MS = 4000;
 
 interface SceneEditorProps {
   sceneId: string;
@@ -21,6 +22,7 @@ interface SceneEditorProps {
   title: string;
   initialContent: unknown;
   onWordCountChange: (sceneId: string, wordCount: number) => void;
+  onContentChange: (sceneId: string, content: unknown) => void;
 }
 
 export function SceneEditor({
@@ -29,10 +31,15 @@ export function SceneEditor({
   title,
   initialContent,
   onWordCountChange,
+  onContentChange,
 }: SceneEditorProps) {
-  const [status, setStatus] = useState<"saving" | "saved">("saved");
+  const [status, setStatus] = useState<"saving" | "saved" | "error">("saved");
   const [focusMode, setFocusMode] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always mirrors the newest edited content that hasn't been confirmed saved
+  // yet. Read by the flush-on-unmount cleanup and the beforeunload guard, so
+  // a scene switch or a closed tab can never silently drop the last edit.
+  const pendingContentRef = useRef<unknown>(null);
 
   const editor = useEditor(
     {
@@ -54,22 +61,67 @@ export function SceneEditor({
         const json = editor.getJSON();
         const words = countWords(json);
         onWordCountChange(sceneId, words);
+        // Keep the parent's in-memory copy current immediately (not
+        // debounced) so re-selecting this scene later in the same session
+        // never falls back to the stale, pre-edit content that was loaded
+        // when the page first opened.
+        onContentChange(sceneId, json);
+        pendingContentRef.current = json;
         setStatus("saving");
         if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(async () => {
-          await saveSceneContent(sceneId, projectId, json);
-          setStatus("saved");
-        }, AUTOSAVE_DELAY_MS);
+        saveTimer.current = scheduleSave(json);
       },
     },
     [sceneId]
   );
 
+  function scheduleSave(json: unknown, delay = AUTOSAVE_DELAY_MS) {
+    return setTimeout(async () => {
+      try {
+        await saveSceneContent(sceneId, projectId, json);
+        // Only clear the pending marker if nothing newer has been typed
+        // while this save was in flight.
+        if (pendingContentRef.current === json) {
+          pendingContentRef.current = null;
+          setStatus("saved");
+        }
+      } catch (error) {
+        console.error("Autosave failed for scene", sceneId, error);
+        setStatus("error");
+        // Keep retrying in the background -- pendingContentRef stays set,
+        // so a scene switch or tab close in the meantime still flushes it.
+        saveTimer.current = scheduleSave(json, RETRY_DELAY_MS);
+      }
+    }, delay);
+  }
+
+  useEffect(() => {
+    // Warn before an actual tab close / refresh if there's an edit that
+    // hasn't been confirmed saved yet.
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (pendingContentRef.current !== null) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      // Flush rather than discard: switching to another scene (or leaving
+      // the page) unmounts this component, and previously that just
+      // cancelled the pending debounce -- silently losing whatever was
+      // typed in the last second and a half.
+      if (pendingContentRef.current !== null) {
+        saveSceneContent(sceneId, projectId, pendingContentRef.current).catch((error) => {
+          console.error("Flush-on-exit save failed for scene", sceneId, error);
+        });
+      }
     };
-  }, []);
+  }, [sceneId, projectId]);
 
   if (!editor) return null;
 
@@ -80,17 +132,23 @@ export function SceneEditor({
         <div className="flex shrink-0 items-center gap-3 text-xs">
           <span
             className={cn(
-              "flex w-16 items-center justify-end gap-1 text-right",
-              status === "saving" ? "text-muted-foreground" : "text-success"
+              "flex w-24 items-center justify-end gap-1 text-right",
+              status === "saved" && "text-success",
+              status === "saving" && "text-muted-foreground",
+              status === "error" && "text-destructive"
             )}
           >
             <span
               className={cn(
                 "size-1.5 rounded-full",
-                status === "saving" ? "animate-pulse bg-muted-foreground" : "bg-success"
+                status === "saved" && "bg-success",
+                status === "saving" && "animate-pulse bg-muted-foreground",
+                status === "error" && "bg-destructive"
               )}
             />
-            {status === "saving" ? "Saving…" : "Saved"}
+            {status === "saving" && "Saving…"}
+            {status === "saved" && "Saved"}
+            {status === "error" && "Couldn't save — retrying"}
           </span>
           <button
             type="button"
