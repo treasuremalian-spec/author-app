@@ -97,6 +97,11 @@ function buildCss(trimSize: TrimSize): string {
   @top-center { content: none; }
   @bottom-center { content: none; }
 }
+@page cover {
+  margin: 0;
+  @top-center { content: none; }
+  @bottom-center { content: none; }
+}
 @page chapterstart {
   @top-center { content: none; }
 }
@@ -135,6 +140,18 @@ h2, h3, h4, h5, h6 {
   margin: 1em 0 0.5em;
 }
 
+.cover-page {
+  page: cover;
+  break-after: page;
+  margin: 0;
+  padding: 0;
+}
+.cover-page img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .titlepage, .part-divider {
   page: titlepage;
   break-before: page;
@@ -210,7 +227,10 @@ export function buildPrintHtml(book: PrintBookInput): string {
 <style>${buildCss(book.trimSize)}</style>
 </head>
 <body>
-<section class="titlepage">
+${book.cover ? `<section class="cover-page">
+  <img src="data:${book.cover.mimeType};base64,${Buffer.from(book.cover.bytes).toString("base64")}" alt=""/>
+</section>
+` : ""}<section class="titlepage">
   <h1>${escapeXml(book.title)}</h1>
   <p class="byline">${escapeXml(book.author)}</p>
 </section>

@@ -6,7 +6,7 @@
 // server-only), so it's free to export whatever plain helpers it needs.
 
 import { prisma } from "@author-app/database";
-import type { EpubChapter, EpubSection } from "@author-app/formatting-engine";
+import type { EpubChapter, EpubCoverImage, EpubSection } from "@author-app/formatting-engine";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
 import { buildTree, type ManuscriptNodeData, type TreeNode } from "@/lib/manuscript-tree";
 
@@ -42,6 +42,29 @@ export interface BookForExport {
   author: string;
   identifier: string;
   sections: EpubSection[];
+  cover: EpubCoverImage | null;
+}
+
+const MIME_TO_EXTENSION: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/** Fetches a cover image's real bytes so it can be embedded directly into an EPUB/PDF -- a stored URL alone is no use to an e-reader or a headless-browser-rendered PDF, both of which need the actual file. A missing or unreachable cover fails soft (the export still proceeds without one) rather than blocking the whole download. */
+async function loadCoverImage(coverImageUrl: string | null): Promise<EpubCoverImage | null> {
+  if (!coverImageUrl) return null;
+  try {
+    const response = await fetch(coverImageUrl);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+    const extension = MIME_TO_EXTENSION[mimeType] || "jpg";
+    return { bytes: new Uint8Array(arrayBuffer), mimeType, extension };
+  } catch {
+    return null;
+  }
 }
 
 /** Loads a project's manuscript, checks ownership, and shapes it for either export format. */
@@ -102,11 +125,14 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     return { kind: "chapter" as const, chapter: toChapter(root) };
   });
 
+  const cover = await loadCoverImage(project.coverImageUrl);
+
   return {
     title: project.title || "Untitled",
     author: authorProfile?.displayName || user.email || "Unknown Author",
     identifier: `urn:author-app:${project.id}`,
     sections,
+    cover,
   };
 }
 

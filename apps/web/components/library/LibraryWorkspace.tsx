@@ -7,6 +7,7 @@ import { LayoutGrid, Table2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { daysRemaining, progressPercent, wordsPerDayNeeded } from "@/lib/writing-progress";
+import { CoverUploadButton } from "@/components/library/CoverUploadButton";
 
 const STATUS_LABEL: Record<string, string> = {
   IDEA: "Idea",
@@ -28,12 +29,20 @@ export interface LibraryProject {
   targetWordCount: number | null;
   currentWordCount: number;
   deadline: Date | string | null;
+  coverImageUrl: string | null;
 }
 
 type View = "shelf" | "progress";
 
 export function LibraryWorkspace({ projects }: { projects: LibraryProject[] }) {
   const [view, setView] = useState<View>("shelf");
+  // Optimistic cover updates -- so a just-uploaded cover shows immediately
+  // rather than waiting on a full server round-trip.
+  const [coverOverrides, setCoverOverrides] = useState<Record<string, string>>({});
+
+  const withCovers = projects.map((project) =>
+    coverOverrides[project.id] ? { ...project, coverImageUrl: coverOverrides[project.id] } : project
+  );
 
   return (
     <div>
@@ -42,7 +51,14 @@ export function LibraryWorkspace({ projects }: { projects: LibraryProject[] }) {
         <ViewButton active={view === "progress"} onClick={() => setView("progress")} icon={Table2} label="Progress" />
       </div>
 
-      {view === "shelf" ? <ShelfView projects={projects} /> : <ProgressView projects={projects} />}
+      {view === "shelf" ? (
+        <ShelfView
+          projects={withCovers}
+          onCoverChange={(id, url) => setCoverOverrides((prev) => ({ ...prev, [id]: url }))}
+        />
+      ) : (
+        <ProgressView projects={withCovers} />
+      )}
     </div>
   );
 }
@@ -73,7 +89,13 @@ function ViewButton({
   );
 }
 
-function ShelfView({ projects }: { projects: LibraryProject[] }) {
+function ShelfView({
+  projects,
+  onCoverChange,
+}: {
+  projects: LibraryProject[];
+  onCoverChange: (projectId: string, url: string) => void;
+}) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {projects.map((project) => {
@@ -82,6 +104,13 @@ function ShelfView({ projects }: { projects: LibraryProject[] }) {
         return (
           <Link key={project.id} href={`/projects/${project.id}`}>
             <Card className="flex h-full flex-col gap-3 p-5 transition-shadow hover:shadow-md">
+              <CoverUploadButton
+                projectId={project.id}
+                coverImageUrl={project.coverImageUrl}
+                onCoverChange={(url) => onCoverChange(project.id, url)}
+                className="aspect-[2/3] w-full"
+              />
+
               <div className="flex items-start justify-between gap-2">
                 <p className="font-display text-lg font-semibold leading-tight">{project.title}</p>
                 <span className="shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">

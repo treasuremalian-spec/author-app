@@ -28,6 +28,13 @@ export type EpubSection =
   | { kind: "part"; part: EpubPart }
   | { kind: "chapter"; chapter: EpubChapter };
 
+export interface EpubCoverImage {
+  bytes: Uint8Array;
+  mimeType: string;
+  /** File extension without the dot, e.g. "jpg". */
+  extension: string;
+}
+
 export interface EpubBookInput {
   title: string;
   author: string;
@@ -37,6 +44,8 @@ export interface EpubBookInput {
   identifier: string;
   /** Top-level Part/Chapter nodes, in reading order. */
   sections: EpubSection[];
+  /** The book's cover image, if one has been uploaded. Shown as the EPUB's actual cover on a real e-reader. */
+  cover?: EpubCoverImage | null;
 }
 
 interface ManifestEntry {
@@ -77,6 +86,16 @@ function titlePageHtml(book: EpubBookInput): string {
     <p class="by">${escapeXml(book.author)}</p>
   </section>`,
     "titlepage"
+  );
+}
+
+function coverPageHtml(book: EpubBookInput, coverFilename: string): string {
+  return xhtmlPage(
+    book.title,
+    `  <section epub:type="cover" class="cover-page">
+    <img src="${coverFilename}" alt="${escapeXml(book.title)} cover"/>
+  </section>`,
+    "cover-page"
   );
 }
 
@@ -147,6 +166,16 @@ h1 + p,
   margin: 1.5em 0;
   letter-spacing: 0.5em;
 }
+.cover-page {
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+.cover-page img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
 .titlepage {
   text-align: center;
   margin-top: 35%;
@@ -187,7 +216,13 @@ function containerXml(): string {
 </container>`;
 }
 
-function contentOpf(book: EpubBookInput, manifest: ManifestEntry[], spineIds: string[], modified: string): string {
+function contentOpf(
+  book: EpubBookInput,
+  manifest: ManifestEntry[],
+  spineIds: string[],
+  modified: string,
+  coverManifestId: string | null
+): string {
   const manifestXml = manifest
     .map(
       (m) =>
@@ -205,7 +240,8 @@ function contentOpf(book: EpubBookInput, manifest: ManifestEntry[], spineIds: st
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(book.author)}</dc:creator>
     <dc:language>${book.language ?? "en"}</dc:language>
-    <meta property="dcterms:modified">${modified}</meta>
+    <meta property="dcterms:modified">${modified}</meta>${coverManifestId ? `
+    <meta name="cover" content="${coverManifestId}"/>` : ""}
   </metadata>
   <manifest>
 ${manifestXml}
@@ -283,8 +319,23 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
     { id: "css", filename: "styles.css", mediaType: "text/css" },
     { id: "title", filename: "title.xhtml", mediaType: "application/xhtml+xml" },
   ];
-  const spineIds = ["title"];
+  const spineIds: string[] = [];
   const navEntries: NavEntry[] = [];
+
+  let coverManifestId: string | null = null;
+  if (book.cover) {
+    const coverImageFilename = `cover.${book.cover.extension}`;
+    coverManifestId = "cover-image";
+    oebps.file(coverImageFilename, book.cover.bytes);
+    manifest.push({ id: coverManifestId, filename: coverImageFilename, mediaType: book.cover.mimeType, properties: "cover-image" });
+
+    const coverPageFilename = "cover.xhtml";
+    oebps.file(coverPageFilename, coverPageHtml(book, coverImageFilename));
+    manifest.push({ id: "cover-page", filename: coverPageFilename, mediaType: "application/xhtml+xml" });
+    spineIds.push("cover-page");
+  }
+
+  spineIds.push("title");
 
   let chapterNumber = 0;
   let partNumber = 0;
@@ -320,7 +371,7 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
   const modified = new Date().toISOString().replace(/\.\d+Z$/, "Z");
   oebps.file("nav.xhtml", navXhtml(book, navEntries));
   oebps.file("toc.ncx", tocNcx(book, navEntries));
-  oebps.file("content.opf", contentOpf(book, manifest, spineIds, modified));
+  oebps.file("content.opf", contentOpf(book, manifest, spineIds, modified, coverManifestId));
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", mimeType: "application/epub+zip" });
   return buffer;

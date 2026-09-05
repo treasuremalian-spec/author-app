@@ -24,18 +24,35 @@ export async function GET(
   const { projectId } = await params;
   const trimSize = parseTrimSize(request.nextUrl.searchParams.get("trim"));
 
-  const book = await loadBookForExport(projectId);
-  const html = buildPrintHtml({ ...book, trimSize });
-  const pdf = await renderPrintPdf(html);
+  try {
+    const book = await loadBookForExport(projectId);
+    const html = buildPrintHtml({ ...book, trimSize });
+    const pdf = await renderPrintPdf(html);
 
-  const safeFilename = safeBookFilename(book.title);
-  const trimSuffix = trimSize.replace("x", "-");
+    const safeFilename = safeBookFilename(book.title);
+    const trimSuffix = trimSize.replace("x", "-");
 
-  return new NextResponse(new Uint8Array(pdf), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${safeFilename}-${trimSuffix}.pdf"`,
-      "Content-Length": String(pdf.length),
-    },
-  });
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${safeFilename}-${trimSuffix}.pdf"`,
+        "Content-Length": String(pdf.length),
+      },
+    });
+  } catch (error) {
+    // A failure here used to come back as Next.js's generic error page --
+    // which downloads (thanks to the <a download> button) looking like a
+    // blank/garbled "pdf" with no clue what went wrong. Surface the real
+    // cause instead: this is temporary-but-permanent instrumentation for a
+    // pipeline that can not be smoke-tested locally (see project memory) --
+    // keep it rather than removing it once things are working, since a
+    // future Vercel-only failure here would otherwise be just as invisible.
+    console.error("PDF export failed for project", projectId, error);
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    return NextResponse.json(
+      { error: "PDF export failed", message, stack },
+      { status: 500 }
+    );
+  }
 }
