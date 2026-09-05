@@ -5,7 +5,10 @@
   "main": "index.ts",
   "types": "index.ts",
   "dependencies": {
-    "jszip": "^3.10.1"
+    "@sparticuz/chromium": "^149.0.0",
+    "jszip": "^3.10.1",
+    "pagedjs": "^0.4.3",
+    "puppeteer-core": "^25.10.0"
   },
   "devDependencies": {
     "typescript": "^5"
