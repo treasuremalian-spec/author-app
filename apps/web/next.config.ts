@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // puppeteer-core, @sparticuz/chromium, and pagedjs all contain native
+  // binaries / non-JS assets and dynamic runtime requires that Next's
+  // bundler shouldn't try to statically process -- left as plain runtime
+  // requires from node_modules instead. Without this, the Vercel build
+  // itself fails trying to bundle them (found this out the hard way on
+  // the first deploy attempt of the PDF export route).
+  serverExternalPackages: ["puppeteer-core", "@sparticuz/chromium", "pagedjs"],
+
   // The print-PDF export route reads two things out of node_modules at
   // runtime via non-static paths that Next's build-time file tracer can
   // miss: @sparticuz/chromium's compressed Chromium binary, and the
