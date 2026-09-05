@@ -33,11 +33,23 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import fs from "node:fs";
+import path from "node:path";
 import { createRequire } from "node:module";
 
+// pagedjs's package.json restricts imports to its declared `exports` map,
+// which does not include anything under dist/ -- so a direct
+// require.resolve("pagedjs/dist/paged.polyfill.min.js") fails at build
+// time (Turbopack enforces the same exports restriction Node itself does,
+// and failed the Vercel build on the first deploy attempt). Instead we
+// resolve the package's real entry point (an allowed, exported path),
+// then compute the dist file's path ourselves with plain path math --
+// exports restrictions only govern require/import resolution, not
+// filesystem access once we already know where the package lives.
 function loadPagedPolyfillSource(): string {
   const require = createRequire(import.meta.url);
-  const polyfillPath = require.resolve("pagedjs/dist/paged.polyfill.min.js");
+  const entryPath = require.resolve("pagedjs"); // .../node_modules/pagedjs/lib/index.cjs
+  const packageRoot = path.dirname(path.dirname(entryPath)); // strip lib/index.cjs
+  const polyfillPath = path.join(packageRoot, "dist", "paged.polyfill.min.js");
   return fs.readFileSync(polyfillPath, "utf8");
 }
 
