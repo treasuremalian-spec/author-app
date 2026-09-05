@@ -190,11 +190,24 @@ export async function updateLocation(
 
   const { worldbuilding, ...rest } = data;
 
+  // Prisma's Json input type doesn't accept `undefined` values, only
+  // string/null -- normalize every section to a plain, fully-populated
+  // object right before writing it so we never send a partial/undefined
+  // shape into the customFields column.
+  const customFields = worldbuilding
+    ? Object.fromEntries(
+        LOCATION_WORLDBUILDING_SECTIONS.map((section) => [
+          section.key,
+          worldbuilding[section.key] ?? null,
+        ])
+      )
+    : undefined;
+
   await prisma.location.update({
     where: { id: locationId },
     data: {
       ...rest,
-      ...(worldbuilding !== undefined ? { customFields: worldbuilding } : {}),
+      ...(customFields ? { customFields } : {}),
     },
   });
   revalidatePath(`/projects/${projectId}/story-bible`);
