@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
+import { unstable_rethrow } from "next/navigation";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { saveSceneContent } from "@/lib/actions/manuscript";
@@ -34,6 +35,7 @@ export function SceneEditor({
   onContentChange,
 }: SceneEditorProps) {
   const [status, setStatus] = useState<"saving" | "saved" | "error">("saved");
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always mirrors the newest edited content that hasn't been confirmed saved
@@ -84,10 +86,19 @@ export function SceneEditor({
         if (pendingContentRef.current === json) {
           pendingContentRef.current = null;
           setStatus("saved");
+          setErrorDetail(null);
         }
       } catch (error) {
+        // requireUser() inside the server action calls redirect("/login")
+        // when the session's gone -- that throws Next's special internal
+        // signal, not a real error. unstable_rethrow lets it through so the
+        // framework can actually perform the redirect, instead of us
+        // treating "you got logged out" as a retryable save failure.
+        unstable_rethrow(error);
+        const message = error instanceof Error ? error.message : String(error);
         console.error("Autosave failed for scene", sceneId, error);
         setStatus("error");
+        setErrorDetail(message);
         // Keep retrying in the background -- pendingContentRef stays set,
         // so a scene switch or tab close in the meantime still flushes it.
         saveTimer.current = scheduleSave(json, RETRY_DELAY_MS);
@@ -130,26 +141,34 @@ export function SceneEditor({
       <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <p className="truncate font-display text-base font-semibold">{title}</p>
         <div className="flex shrink-0 items-center gap-3 text-xs">
-          <span
-            className={cn(
-              "flex w-24 items-center justify-end gap-1 text-right",
-              status === "saved" && "text-success",
-              status === "saving" && "text-muted-foreground",
-              status === "error" && "text-destructive"
-            )}
-          >
+          <div className="flex flex-col items-end">
             <span
               className={cn(
-                "size-1.5 rounded-full",
-                status === "saved" && "bg-success",
-                status === "saving" && "animate-pulse bg-muted-foreground",
-                status === "error" && "bg-destructive"
+                "flex w-24 items-center justify-end gap-1 text-right",
+                status === "saved" && "text-success",
+                status === "saving" && "text-muted-foreground",
+                status === "error" && "text-destructive"
               )}
-            />
-            {status === "saving" && "Saving…"}
-            {status === "saved" && "Saved"}
-            {status === "error" && "Couldn't save — retrying"}
-          </span>
+              title={errorDetail ?? undefined}
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  status === "saved" && "bg-success",
+                  status === "saving" && "animate-pulse bg-muted-foreground",
+                  status === "error" && "bg-destructive"
+                )}
+              />
+              {status === "saving" && "Saving…"}
+              {status === "saved" && "Saved"}
+              {status === "error" && "Couldn't save — retrying"}
+            </span>
+            {status === "error" && errorDetail && (
+              <span className="max-w-[220px] truncate text-[10px] text-destructive/80" title={errorDetail}>
+                {errorDetail}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setFocusMode((f) => !f)}
