@@ -34,21 +34,55 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import fs from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 
 // pagedjs's package.json restricts imports to its declared `exports` map,
 // which does not include anything under dist/ -- so a direct
 // require.resolve("pagedjs/dist/paged.polyfill.min.js") fails at build
 // time (Turbopack enforces the same exports restriction Node itself does,
-// and failed the Vercel build on the first deploy attempt). Instead we
-// resolve the package's real entry point (an allowed, exported path),
-// then compute the dist file's path ourselves with plain path math --
-// exports restrictions only govern require/import resolution, not
-// filesystem access once we already know where the package lives.
+// and failed the Vercel build on the first deploy attempt).
+//
+// A later attempt resolved the package's real entry point via
+// require.resolve("pagedjs") and computed the dist path from there --
+// but that broke too (2026-09-05, found via the pdf.json error the PDF
+// export route now returns on failure -- see route.ts): in the deployed
+// Vercel function, Turbopack's bundling of require.resolve() for an
+// externalized package (see serverExternalPackages in next.config.ts)
+// returned an internal bundler module id -- a bare NUMBER -- instead of a
+// real file path, crashing path.dirname() with "The path argument must
+// be of type string. Received type number". This is a known class of
+// Turbopack bug around require.resolve() + externalized native/asset
+// packages in a monorepo (see e.g. vercel/next.js#76497, #87737) -- not
+// fixable by changing what we resolve, since require.resolve() itself is
+// the unreliable part here.
+//
+// Fix: don't use require.resolve() (or any bundler-visible require/import
+// of "pagedjs") to find the file at all. Walk up from the process's own
+// working directory looking for a real node_modules/pagedjs folder on
+// disk -- plain fs.existsSync checks, nothing a bundler can rewrite. This
+// works locally (cwd is apps/web; pagedjs is hoisted one level up to the
+// npm workspaces root's node_modules) and on Vercel (cwd is the deployed
+// function root, which outputFileTracingIncludes below guarantees has a
+// real node_modules/pagedjs/dist on disk) without needing to know or
+// guess which of those two shapes we're actually running under.
+function findNodeModulesDir(packageName: string): string {
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = path.join(dir, "node_modules", packageName);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      throw new Error(
+        `Could not find node_modules/${packageName} by walking up from ${process.cwd()}.`
+      );
+    }
+    dir = parent;
+  }
+}
+
 function loadPagedPolyfillSource(): string {
-  const require = createRequire(import.meta.url);
-  const entryPath = require.resolve("pagedjs"); // .../node_modules/pagedjs/lib/index.cjs
-  const packageRoot = path.dirname(path.dirname(entryPath)); // strip lib/index.cjs
+  const packageRoot = findNodeModulesDir("pagedjs");
   const polyfillPath = path.join(packageRoot, "dist", "paged.polyfill.min.js");
   return fs.readFileSync(polyfillPath, "utf8");
 }
