@@ -7,11 +7,13 @@ import {
   createLocation,
   deleteLocation,
   updateLocation,
-  LOCATION_WORLDBUILDING_SECTIONS,
   type LocationUpdateData,
+} from "@/lib/actions/story-bible";
+import {
+  LOCATION_WORLDBUILDING_SECTIONS,
   type LocationWorldbuilding,
   type LocationWorldbuildingKey,
-} from "@/lib/actions/story-bible";
+} from "@/lib/location-worldbuilding";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";

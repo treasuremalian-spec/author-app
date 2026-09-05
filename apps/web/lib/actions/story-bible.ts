@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@author-app/database";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
+import {
+  parseWorldbuilding,
+  normalizeWorldbuilding,
+  type LocationWorldbuilding,
+} from "@/lib/location-worldbuilding";
 
 // ---------------------------------------------------------------------------
 // Characters
@@ -71,56 +76,11 @@ export async function deleteCharacter(characterId: string, projectId: string) {
 // ---------------------------------------------------------------------------
 // Locations
 // ---------------------------------------------------------------------------
-
-// The richer worldbuilding sections (inspired by the "A Whole New World" page
-// in Tasia's Notion Writer's Bible template) live inside Location's existing
-// `customFields` JSON column rather than as their own migration-requiring
-// columns -- one flexible blob keyed by section.
-export const LOCATION_WORLDBUILDING_SECTIONS = [
-  {
-    key: "geography",
-    label: "Geography & environment",
-    placeholder: "Landmarks, climate, terrain, ecosystems -- what does the physical world look and feel like?",
-  },
-  {
-    key: "historyCulture",
-    label: "History & culture",
-    placeholder: "Major events, traditions and practices, languages, religion.",
-  },
-  {
-    key: "societyPolitics",
-    label: "Society & politics",
-    placeholder: "Government, social hierarchy, political factions and entities, laws.",
-  },
-  {
-    key: "economyTechnology",
-    label: "Economy & technology",
-    placeholder: "Economic systems, tech level, magic systems (if any), major industries.",
-  },
-  {
-    key: "dailyLife",
-    label: "Daily life & social customs",
-    placeholder: "Everyday routines, housing, food, clothing, entertainment.",
-  },
-  {
-    key: "inspiration",
-    label: "Inspiration",
-    placeholder: "Reference links, mood, or real places/images this is inspired by.",
-  },
-] as const;
-
-export type LocationWorldbuildingKey = (typeof LOCATION_WORLDBUILDING_SECTIONS)[number]["key"];
-export type LocationWorldbuilding = Partial<Record<LocationWorldbuildingKey, string | null>>;
-
-function parseWorldbuilding(raw: unknown): LocationWorldbuilding {
-  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const result: LocationWorldbuilding = {};
-  for (const section of LOCATION_WORLDBUILDING_SECTIONS) {
-    const value = source[section.key];
-    result[section.key] = typeof value === "string" ? value : null;
-  }
-  return result;
-}
+//
+// The richer worldbuilding fields (geography, history & culture, etc.) live
+// in ./../location-worldbuilding.ts, a plain (non "use server") module --
+// this file may only export async functions, so the shared constant list of
+// sections and its parse/normalize helpers can't live here.
 
 export interface LocationRow {
   id: string;
@@ -147,7 +107,7 @@ export async function listLocations(projectId: string): Promise<LocationRow[]> {
     customFields: unknown;
   };
 
-  return (locations as LocationRowLike[]).map((l) => ({
+  return (locations as LocationRowLike[]).map((l: LocationRowLike) => ({
     id: l.id,
     name: l.name,
     description: l.description,
@@ -189,19 +149,7 @@ export async function updateLocation(
   await assertProjectOwnership(projectId, user.id);
 
   const { worldbuilding, ...rest } = data;
-
-  // Prisma's Json input type doesn't accept `undefined` values, only
-  // string/null -- normalize every section to a plain, fully-populated
-  // object right before writing it so we never send a partial/undefined
-  // shape into the customFields column.
-  const customFields = worldbuilding
-    ? Object.fromEntries(
-        LOCATION_WORLDBUILDING_SECTIONS.map((section) => [
-          section.key,
-          worldbuilding[section.key] ?? null,
-        ])
-      )
-    : undefined;
+  const customFields = worldbuilding ? normalizeWorldbuilding(worldbuilding) : undefined;
 
   await prisma.location.update({
     where: { id: locationId },
