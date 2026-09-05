@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@author-app/database";
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
@@ -172,37 +172,53 @@ export async function saveSceneContent(
   sceneId: string,
   projectId: string,
   content: unknown
-) {
-  const user = await requireUser();
-  await assertProjectOwnership(projectId, user.id);
+): Promise<{ ok: true; wordCount: number } | { ok: false; error: string }> {
+  // Returns a result object instead of throwing on failure. Next.js
+  // redacts thrown Server Action errors in production down to a generic
+  // "Minified React error #441" with no real message -- which made a
+  // genuine save failure (e.g. a bad DB write) undiagnosable from the
+  // client. A plain returned value isn't subject to that redaction, so
+  // the real error message actually reaches the person using the app.
+  try {
+    const user = await requireUser();
+    await assertProjectOwnership(projectId, user.id);
 
-  const wordCount = countWords(content);
+    const wordCount = countWords(content);
 
-  const latestVersion = await prisma.sceneVersion.findFirst({
-    where: { sceneId },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
+    const latestVersion = await prisma.sceneVersion.findFirst({
+      where: { sceneId },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
 
-  const needsSnapshot =
-    !latestVersion ||
-    Date.now() - latestVersion.createdAt.getTime() > SNAPSHOT_INTERVAL_MS;
+    const needsSnapshot =
+      !latestVersion ||
+      Date.now() - latestVersion.createdAt.getTime() > SNAPSHOT_INTERVAL_MS;
 
-  await prisma.$transaction([
-    prisma.scene.update({
-      where: { id: sceneId },
-      data: { content: content as object, wordCount },
-    }),
-    ...(needsSnapshot
-      ? [
-          prisma.sceneVersion.create({
-            data: { sceneId, content: content as object, wordCount, savedById: user.id },
-          }),
-        ]
-      : []),
-  ]);
+    await prisma.$transaction([
+      prisma.scene.update({
+        where: { id: sceneId },
+        data: { content: content as object, wordCount },
+      }),
+      ...(needsSnapshot
+        ? [
+            prisma.sceneVersion.create({
+              data: { sceneId, content: content as object, wordCount, savedById: user.id },
+            }),
+          ]
+        : []),
+    ]);
 
-  return { wordCount };
+    return { ok: true, wordCount };
+  } catch (error) {
+    // requireUser() calls redirect("/login") when the session's gone --
+    // that's Next's own internal control-flow signal, not a real failure.
+    // Let it through so the framework can actually perform the redirect.
+    unstable_rethrow(error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("saveSceneContent failed for scene", sceneId, error);
+    return { ok: false, error: message };
+  }
 }
 
 export async function updateSceneMeta(

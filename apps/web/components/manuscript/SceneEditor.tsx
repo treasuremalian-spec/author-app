@@ -80,7 +80,18 @@ export function SceneEditor({
   function scheduleSave(json: unknown, delay = AUTOSAVE_DELAY_MS) {
     return setTimeout(async () => {
       try {
-        await saveSceneContent(sceneId, projectId, json);
+        const result = await saveSceneContent(sceneId, projectId, json);
+        if (!result.ok) {
+          // A real failure the server action caught and reported (not a
+          // thrown error -- Next redacts those to a useless "Minified
+          // React error #441" in production, so saveSceneContent returns
+          // the real message instead of throwing it).
+          console.error("Autosave failed for scene", sceneId, result.error);
+          setStatus("error");
+          setErrorDetail(result.error);
+          saveTimer.current = scheduleSave(json, RETRY_DELAY_MS);
+          return;
+        }
         // Only clear the pending marker if nothing newer has been typed
         // while this save was in flight.
         if (pendingContentRef.current === json) {
@@ -96,7 +107,7 @@ export function SceneEditor({
         // treating "you got logged out" as a retryable save failure.
         unstable_rethrow(error);
         const message = error instanceof Error ? error.message : String(error);
-        console.error("Autosave failed for scene", sceneId, error);
+        console.error("Autosave failed for scene (unexpected throw)", sceneId, error);
         setStatus("error");
         setErrorDetail(message);
         // Keep retrying in the background -- pendingContentRef stays set,
@@ -127,9 +138,15 @@ export function SceneEditor({
       // cancelled the pending debounce -- silently losing whatever was
       // typed in the last second and a half.
       if (pendingContentRef.current !== null) {
-        saveSceneContent(sceneId, projectId, pendingContentRef.current).catch((error) => {
-          console.error("Flush-on-exit save failed for scene", sceneId, error);
-        });
+        saveSceneContent(sceneId, projectId, pendingContentRef.current)
+          .then((result) => {
+            if (!result.ok) {
+              console.error("Flush-on-exit save failed for scene", sceneId, result.error);
+            }
+          })
+          .catch((error) => {
+            console.error("Flush-on-exit save failed for scene (unexpected throw)", sceneId, error);
+          });
       }
     };
   }, [sceneId, projectId]);
