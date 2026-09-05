@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
-import { unstable_rethrow } from "next/navigation";
 import { Maximize2, Minimize2 } from "lucide-react";
 
-import { saveSceneContent } from "@/lib/actions/manuscript";
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
 import { EditorToolbar } from "./Toolbar";
@@ -26,6 +25,35 @@ interface SceneEditorProps {
   onContentChange: (sceneId: string, content: unknown) => void;
 }
 
+type SaveResult =
+  | { ok: true; wordCount: number }
+  | { ok: false; error: string; unauthorized?: boolean };
+
+// Plain fetch() to a Route Handler, not a Server Action -- see
+// lib/scene-save.ts for why (Server Actions here hit two real, obscure
+// framework bugs in a row: production error redaction, then a "temporary
+// client reference" crash). A plain HTTP request/response sidesteps both.
+async function saveScene(sceneId: string, projectId: string, content: unknown): Promise<SaveResult> {
+  try {
+    const res = await fetch(`/api/scenes/${sceneId}/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, content }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: (data && typeof data.error === "string" && data.error) || `Save failed (status ${res.status}).`,
+        unauthorized: res.status === 401,
+      };
+    }
+    return { ok: true, wordCount: data?.wordCount ?? countWords(content) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export function SceneEditor({
   sceneId,
   projectId,
@@ -34,6 +62,7 @@ export function SceneEditor({
   onWordCountChange,
   onContentChange,
 }: SceneEditorProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<"saving" | "saved" | "error">("saved");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
@@ -79,40 +108,29 @@ export function SceneEditor({
 
   function scheduleSave(json: unknown, delay = AUTOSAVE_DELAY_MS) {
     return setTimeout(async () => {
-      try {
-        const result = await saveSceneContent(sceneId, projectId, json);
-        if (!result.ok) {
-          // A real failure the server action caught and reported (not a
-          // thrown error -- Next redacts those to a useless "Minified
-          // React error #441" in production, so saveSceneContent returns
-          // the real message instead of throwing it).
-          console.error("Autosave failed for scene", sceneId, result.error);
-          setStatus("error");
-          setErrorDetail(result.error);
-          saveTimer.current = scheduleSave(json, RETRY_DELAY_MS);
+      const result = await saveScene(sceneId, projectId, json);
+      if (!result.ok) {
+        console.error("Autosave failed for scene", sceneId, result.error);
+        if (result.unauthorized) {
+          // The session's gone -- retrying forever would just spin. Send
+          // them to log back in; their unsaved edit still gets flushed on
+          // the way out via the unmount cleanup below.
+          router.push("/login");
           return;
         }
-        // Only clear the pending marker if nothing newer has been typed
-        // while this save was in flight.
-        if (pendingContentRef.current === json) {
-          pendingContentRef.current = null;
-          setStatus("saved");
-          setErrorDetail(null);
-        }
-      } catch (error) {
-        // requireUser() inside the server action calls redirect("/login")
-        // when the session's gone -- that throws Next's special internal
-        // signal, not a real error. unstable_rethrow lets it through so the
-        // framework can actually perform the redirect, instead of us
-        // treating "you got logged out" as a retryable save failure.
-        unstable_rethrow(error);
-        const message = error instanceof Error ? error.message : String(error);
-        console.error("Autosave failed for scene (unexpected throw)", sceneId, error);
         setStatus("error");
-        setErrorDetail(message);
+        setErrorDetail(result.error);
         // Keep retrying in the background -- pendingContentRef stays set,
         // so a scene switch or tab close in the meantime still flushes it.
         saveTimer.current = scheduleSave(json, RETRY_DELAY_MS);
+        return;
+      }
+      // Only clear the pending marker if nothing newer has been typed
+      // while this save was in flight.
+      if (pendingContentRef.current === json) {
+        pendingContentRef.current = null;
+        setStatus("saved");
+        setErrorDetail(null);
       }
     }, delay);
   }
@@ -138,15 +156,11 @@ export function SceneEditor({
       // cancelled the pending debounce -- silently losing whatever was
       // typed in the last second and a half.
       if (pendingContentRef.current !== null) {
-        saveSceneContent(sceneId, projectId, pendingContentRef.current)
-          .then((result) => {
-            if (!result.ok) {
-              console.error("Flush-on-exit save failed for scene", sceneId, result.error);
-            }
-          })
-          .catch((error) => {
-            console.error("Flush-on-exit save failed for scene (unexpected throw)", sceneId, error);
-          });
+        saveScene(sceneId, projectId, pendingContentRef.current).then((result) => {
+          if (!result.ok) {
+            console.error("Flush-on-exit save failed for scene", sceneId, result.error);
+          }
+        });
       }
     };
   }, [sceneId, projectId]);

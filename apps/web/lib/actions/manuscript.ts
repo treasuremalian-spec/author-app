@@ -1,15 +1,10 @@
 "use server";
 
-import { redirect, unstable_rethrow } from "next/navigation";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@author-app/database";
-import { countWords, EMPTY_DOC } from "@/lib/wordcount";
+import { EMPTY_DOC } from "@/lib/wordcount";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
-
-// How long we let sit between autosave calls before we also stash a
-// restorable snapshot -- frequent enough that undo history is meaningful,
-// rare enough that we're not writing hundreds of snapshots a day.
-const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 
 function defaultTitle(type: "PART" | "CHAPTER" | "SCENE") {
   if (type === "PART") return "New Part";
@@ -168,58 +163,13 @@ export async function reorderNodes(
 // Scene content: autosave, metadata, version history
 // ---------------------------------------------------------------------------
 
-export async function saveSceneContent(
-  sceneId: string,
-  projectId: string,
-  content: unknown
-): Promise<{ ok: true; wordCount: number } | { ok: false; error: string }> {
-  // Returns a result object instead of throwing on failure. Next.js
-  // redacts thrown Server Action errors in production down to a generic
-  // "Minified React error #441" with no real message -- which made a
-  // genuine save failure (e.g. a bad DB write) undiagnosable from the
-  // client. A plain returned value isn't subject to that redaction, so
-  // the real error message actually reaches the person using the app.
-  try {
-    const user = await requireUser();
-    await assertProjectOwnership(projectId, user.id);
-
-    const wordCount = countWords(content);
-
-    const latestVersion = await prisma.sceneVersion.findFirst({
-      where: { sceneId },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
-
-    const needsSnapshot =
-      !latestVersion ||
-      Date.now() - latestVersion.createdAt.getTime() > SNAPSHOT_INTERVAL_MS;
-
-    await prisma.$transaction([
-      prisma.scene.update({
-        where: { id: sceneId },
-        data: { content: content as object, wordCount },
-      }),
-      ...(needsSnapshot
-        ? [
-            prisma.sceneVersion.create({
-              data: { sceneId, content: content as object, wordCount, savedById: user.id },
-            }),
-          ]
-        : []),
-    ]);
-
-    return { ok: true, wordCount };
-  } catch (error) {
-    // requireUser() calls redirect("/login") when the session's gone --
-    // that's Next's own internal control-flow signal, not a real failure.
-    // Let it through so the framework can actually perform the redirect.
-    unstable_rethrow(error);
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("saveSceneContent failed for scene", sceneId, error);
-    return { ok: false, error: message };
-  }
-}
+// Scene content saving (autosave) used to be a Server Action here. It
+// moved to a plain Route Handler -- POST /api/scenes/[sceneId]/save,
+// backed by lib/scene-save.ts -- after Server Actions hit two real,
+// hard-to-diagnose framework issues in a row for this specific call
+// shape (production error redaction to a useless "Minified React error
+// #441", then a "temporary client reference" crash on the returned
+// result). See scene-save.ts for the full explanation.
 
 export async function updateSceneMeta(
   sceneId: string,
