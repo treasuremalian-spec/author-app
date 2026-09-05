@@ -4,11 +4,7 @@ import { Calendar, Target, TrendingUp } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import type { ProjectDetails } from "@/lib/actions/overview";
-
-function daysBetween(from: Date, to: Date) {
-  const ms = to.setHours(0, 0, 0, 0) - from.setHours(0, 0, 0, 0);
-  return Math.round(ms / 86400000);
-}
+import { daysRemaining as getDaysRemaining, progressPercent, wordsPerDayNeeded as getWordsPerDayNeeded } from "@/lib/writing-progress";
 
 function StatTile({
   icon: Icon,
@@ -36,17 +32,9 @@ function StatTile({
 export function ProgressDashboard({ details }: { details: ProjectDetails }) {
   const { currentWordCount, targetWordCount, deadline } = details;
 
-  const progress =
-    targetWordCount && targetWordCount > 0
-      ? Math.min(100, Math.round((currentWordCount / targetWordCount) * 100))
-      : null;
-
-  const daysRemaining = deadline ? daysBetween(new Date(), new Date(deadline)) : null;
-
-  const wordsPerDayNeeded =
-    targetWordCount && daysRemaining !== null && daysRemaining > 0
-      ? Math.max(0, Math.ceil((targetWordCount - currentWordCount) / daysRemaining))
-      : null;
+  const progress = progressPercent(currentWordCount, targetWordCount);
+  const daysRemaining = getDaysRemaining(deadline);
+  const wordsPerDayNeeded = getWordsPerDayNeeded(currentWordCount, targetWordCount, deadline);
 
   return (
     <Card className="space-y-4 p-5">
