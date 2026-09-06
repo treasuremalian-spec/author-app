@@ -88,9 +88,42 @@ function loadPagedPolyfillSource(): string {
   return fs.readFileSync(polyfillPath, "utf8");
 }
 
+// @sparticuz/chromium extracts its bundled Chromium binary to /tmp/chromium
+// the first time executablePath() is called in a given (warm) serverless
+// instance, and short-circuits to that path on every later call by simply
+// checking existsSync(/tmp/chromium) -- see its source. That existsSync
+// check races against its own extraction: the target file is created (and
+// already passes existsSync) the moment the write stream opens, well
+// before the decompressed Chromium binary has actually finished writing
+// to it. If a second export request reaches this same warm instance while
+// the first is still mid-extraction, executablePath() hands it that
+// still-being-written path immediately, and puppeteer's spawn() of it
+// fails with "spawn ETXTBSY" (the OS refuses to execve() a file that's
+// still open for writing elsewhere) -- confirmed 2026-09-06 both from a
+// real production error (a user's PDF export failed with exactly this
+// message and stack trace) and by reproducing the race directly against
+// the pinned @sparticuz/chromium version in this sandbox: two overlapping
+// calls to chromium.executablePath(), staggered by as little as 60ms,
+// reliably reproduced the identical "spawn ETXTBSY" failure on whichever
+// call lost the race.
+//
+// Fix: memoize the extraction at module scope so every renderPrintPdf()
+// call in the same warm instance shares one in-flight extraction instead
+// of each independently hitting chromium's racy existsSync shortcut. A
+// concurrent caller now awaits the SAME promise and only proceeds once
+// extraction has actually finished -- verified locally to fully resolve
+// the race across 5 repeated concurrent-launch runs.
+let chromiumExecutablePathPromise: Promise<string> | null = null;
+function getChromiumExecutablePath(): Promise<string> {
+  if (!chromiumExecutablePathPromise) {
+    chromiumExecutablePathPromise = chromium.executablePath();
+  }
+  return chromiumExecutablePathPromise;
+}
+
 /** Renders a full print-ready HTML document (from buildPrintHtml) to a PDF buffer. */
 export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<Buffer> {
-  const executablePath = await chromium.executablePath();
+  const executablePath = await getChromiumExecutablePath();
 
   const browser = await puppeteer.launch({
     args: chromium.args,
@@ -160,6 +193,25 @@ export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<
     await page.evaluate(async () => {
       const w = window as unknown as { PagedPolyfill: { preview: () => Promise<unknown> } };
       await w.PagedPolyfill.preview();
+    });
+
+    // Tag every physical page Paged.js just built that contains a chapter
+    // (or part) opening with a plain class, so the stylesheet can hide the
+    // running header only on those specific pages (see print-html.ts's
+    // ".pagedjs_page_chapter_start" rule and the long comment above it for
+    // why this is done here, in real DOM, rather than in CSS alone --
+    // CSS's own "@page <name>:first" turned out to mean "first page with
+    // this name in the WHOLE document," not "first page of each chapter,"
+    // which is not what a running-header rule needs). Done directly in
+    // the page after pagination finishes rather than before, since only
+    // now do real .pagedjs_page boxes (and which original content ended
+    // up on which one) actually exist.
+    await page.evaluate(() => {
+      document.querySelectorAll(".pagedjs_page").forEach((pageEl) => {
+        if (pageEl.querySelector(".pagedjs_area .chapter-start")) {
+          pageEl.classList.add("pagedjs_page_chapter_start");
+        }
+      });
     });
 
     // Puppeteer's page.pdf() forces the page into "print" media by

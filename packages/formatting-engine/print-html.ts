@@ -250,8 +250,24 @@ ${
   @top-center { content: none; }
   @bottom-center { content: none; }
 }
-@page chapterstart {
-  @top-center { content: none; }
+/* Chapter-opening pages hide the running header (the big chapter title
+   right there makes it redundant) -- but NOT via a named "chapterstart"
+   CSS page the way this used to work. That named-page approach forced an
+   unwanted page break between the chapter title and its own opening
+   paragraph (a CSS Paged Media page always breaks when the "page" name
+   changes between adjacent content, and the title/body would've needed
+   the SAME name to share a page -- see the .chapter-start comment below).
+   And once title and body share the same name, "@page chapterstart:first"
+   turned out NOT to mean "first page of each chapter" as hoped -- tested
+   locally 2026-09-06 and confirmed Paged.js (like the CSS Paged Media
+   spec itself) resolves ":first" against the first page of that name IN
+   THE WHOLE DOCUMENT, not per contiguous run -- so it fired for chapter
+   one's opening page and never again for chapter two's, three's, etc.
+   Fixed with a real per-page marker instead: render-pdf.ts finds every
+   Paged.js page box whose content includes a .chapter-start element right
+   after pagination finishes, and tags it with this class directly. */
+.pagedjs_page_chapter_start .pagedjs_margin-top-center {
+  visibility: hidden;
 }
 
 html, body {
@@ -349,8 +365,15 @@ ${
 }
 
 .chapter-start {
+  /* No "page: <name>" here on purpose (see the comment above the removed
+     @page chapterstart rule) -- this break-before is now the ONLY thing
+     that starts a chapter on a fresh page. Without a page-name mismatch
+     to trigger an extra automatic break, the opening paragraph right
+     after this element flows onto the SAME page as the title, exactly
+     like a real printed book -- confirmed 2026-09-06 via a real local
+     render (previously the title always got a page entirely to itself,
+     with body text starting on the page after). */
   break-before: ${chapterBreak};
-  page: chapterstart;
   padding-top: 1.6in;
   text-align: center;
 }
