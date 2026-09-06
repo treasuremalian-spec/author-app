@@ -101,6 +101,18 @@ function renderBlock(node: DocNode): string {
       // in their own stylesheets, so this file only has to emit the
       // marker, not know how either export pipeline paginates.
       return `<div class="manual-page-break"></div>`;
+    case "sceneBreak": {
+      // A writer-inserted, ornament-choosable scene break (see
+      // apps/web/components/manuscript/extensions/scene-break.ts).
+      // Deliberately rendered with the SAME ".scene-break" class the
+      // export pipeline's own automatic between-scenes divider already
+      // uses (see sceneHtml() in print-html.ts and chapterPageHtml() in
+      // build-epub.ts) -- a manual break should look like the same kind
+      // of thing as an automatic one, just with the writer's chosen
+      // glyph instead of the hardcoded default.
+      const ornament = typeof node.attrs?.ornament === "string" ? node.attrs.ornament : "\u2042";
+      return `<p class="scene-break">${escapeXml(ornament)}</p>`;
+    }
     default:
       // Unknown block type -- render its children as paragraphs rather
       // than silently dropping content.

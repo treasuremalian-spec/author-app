@@ -14,11 +14,19 @@ import {
   AlignCenter,
   AlignRight,
   SeparatorHorizontal,
+  Asterisk,
   Undo2,
   Redo2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { SCENE_BREAK_OPTIONS } from "./extensions/scene-break";
 
 function ToolbarButton({
   onClick,
@@ -170,6 +178,34 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
       >
         <SeparatorHorizontal className="size-4" />
       </ToolbarButton>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            title="Insert scene break"
+            aria-label="Insert scene break"
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground",
+              editor.isActive("sceneBreak") &&
+                "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
+            )}
+          >
+            <Asterisk className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {SCENE_BREAK_OPTIONS.map((option) => (
+            <DropdownMenuItem
+              key={option.id}
+              onSelect={() => editor.chain().focus().setSceneBreak(option.ornament).run()}
+            >
+              <span className="w-6 text-center font-serif text-base">{option.ornament}</span>
+              <span>{option.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
