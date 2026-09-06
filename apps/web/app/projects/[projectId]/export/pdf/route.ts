@@ -27,7 +27,7 @@ export async function GET(
   try {
     const book = await loadBookForExport(projectId);
     const html = buildPrintHtml({ ...book, trimSize });
-    const pdf = await renderPrintPdf(html);
+    const pdf = await renderPrintPdf(html, trimSize);
 
     const safeFilename = safeBookFilename(book.title);
     const trimSuffix = trimSize.replace("x", "-");

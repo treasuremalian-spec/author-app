@@ -34,6 +34,7 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import fs from "node:fs";
 import path from "node:path";
+import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "./print-html";
 
 // pagedjs's package.json restricts imports to its declared `exports` map,
 // which does not include anything under dist/ -- so a direct
@@ -88,7 +89,7 @@ function loadPagedPolyfillSource(): string {
 }
 
 /** Renders a full print-ready HTML document (from buildPrintHtml) to a PDF buffer. */
-export async function renderPrintPdf(html: string): Promise<Buffer> {
+export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<Buffer> {
   const executablePath = await chromium.executablePath();
 
   const browser = await puppeteer.launch({
@@ -127,16 +128,30 @@ export async function renderPrintPdf(html: string): Promise<Buffer> {
     // own printing step. Without explicitly re-emulating "screen" here,
     // Chromium's print pipeline ignores Paged.js's already-finished
     // layout and falls back to its own generic print pagination against
-    // the underlying content, which is what caused the reported bug: the
-    // exported PDF's pages came out sized to fit the text instead of the
-    // real 5x8/6x9 trim size. Forcing "screen" here tells Chromium to
+    // the underlying content, which was the first reported bug (pages
+    // sized to fit the text). Forcing "screen" here tells Chromium to
     // print exactly the paginated boxes Paged.js already built, rather
     // than re-deriving page breaks itself.
     await page.emulateMediaType("screen");
 
+    // `preferCSSPageSize` (reading the physical page size from the @page
+    // CSS rule) turned out NOT to work together with the "screen" media
+    // emulation above: once media is forced to "screen", Chromium's print
+    // pipeline stopped picking up the @page { size: ... } rule at all and
+    // silently fell back to its default of US Letter (confirmed 2026-09-06
+    // by inspecting a real exported PDF's actual page dimensions -- they
+    // came out as 612x792pt, i.e. 8.5x11in, regardless of the requested
+    // trim size). Rather than depend on that CSS-detection path at all
+    // (which we now know is unreliable under the exact media mode Paged.js
+    // needs), tell Chromium the real physical page size directly -- we
+    // already know it exactly, since it's the same TRIM_SIZE_DIMENSIONS
+    // value buildPrintHtml() baked into the @page rule in the first place.
+    const { width, height } = TRIM_SIZE_DIMENSIONS[trimSize];
+
     const pdf = await page.pdf({
       printBackground: true,
-      preferCSSPageSize: true,
+      width,
+      height,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
 
