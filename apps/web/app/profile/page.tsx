@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { getMyProfile } from "@/lib/actions/profile";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default async function ProfilePage({
@@ -20,6 +21,7 @@ export default async function ProfilePage({
 
   return (
     <div className="min-h-screen bg-muted/30 px-6 py-10">
+      <PresenceHeartbeat />
       <div className="mx-auto max-w-lg">
         <Link
           href="/library"

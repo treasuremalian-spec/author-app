@@ -1,22 +1,32 @@
-import { BookOpen } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Users } from "lucide-react";
 
 import { listProjectsWithStats } from "@/lib/actions/manuscript";
 import { getMyProfile } from "@/lib/actions/profile";
 import { NewProjectDialog } from "@/components/manuscript/NewProjectDialog";
 import { LibraryWorkspace } from "@/components/library/LibraryWorkspace";
 import { ProfileMenu } from "@/components/profile/ProfileMenu";
+import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 
 export default async function LibraryPage() {
   const [projects, { profile }] = await Promise.all([listProjectsWithStats(), getMyProfile()]);
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <PresenceHeartbeat />
       <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
         <div>
           <p className="font-display text-lg font-semibold">Your library</p>
           <p className="text-sm text-muted-foreground">Every book, all in one place.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/friends"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <Users className="size-4" />
+            Friends
+          </Link>
           <NewProjectDialog />
           {profile && (
             <ProfileMenu

@@ -578,6 +578,12 @@ model Sprint {
   wordGoal       Int?
   circleId       String?
 
+  // Discoverable in the public sprints list, joinable by any signed-in
+  // author -- independent of `type` (a GROUP sprint can be public or
+  // invite-only; a FRIEND sprint is always effectively private since it's
+  // only ever visible to the people invited).
+  isPublic Boolean @default(false)
+
   scheduledStart DateTime?
   startedAt      DateTime?
   endedAt        DateTime?
@@ -586,6 +592,7 @@ model Sprint {
 
   createdAt DateTime @default(now())
 
+  @@index([isPublic, status])
   @@map("sprints")
 }
 

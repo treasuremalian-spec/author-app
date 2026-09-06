@@ -17,6 +17,7 @@ import { ManuscriptImage } from "./extensions/manuscript-image";
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
 import { EditorToolbar } from "./Toolbar";
+import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 
 const AUTOSAVE_DELAY_MS = 1500;
 const RETRY_DELAY_MS = 4000;
@@ -178,6 +179,7 @@ export function SceneEditor({
 
   return (
     <div className={cn("flex h-full flex-col bg-muted/30", focusMode && "fixed inset-0 z-40 bg-muted/50")}>
+      <PresenceHeartbeat status="WRITING" />
       <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <p className="truncate font-display text-base font-semibold">{title}</p>
         <div className="flex shrink-0 items-center gap-3 text-xs">
