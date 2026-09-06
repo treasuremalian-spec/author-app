@@ -104,25 +104,46 @@ function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean): string 
 // the HTML. The regex below grabs a whole entity when present, otherwise
 // one Unicode character (the "u" flag keeps astral-plane characters, like
 // some emoji, intact rather than splitting a surrogate pair).
+//
+// Before that, though, any leading inline formatting tags (an opening
+// paragraph that's entirely italicized -- a common convention for a
+// prologue or flashback -- comes through as "<em>The smell of...") are
+// peeled off first. Confirmed 2026-09-06 from a real exported page: without
+// this, the regex above has no concept of HTML at all, so it happily
+// grabbed the "<" that starts "<em>" as if it were the first LETTER,
+// wrapped just that "<" in the drop-cap span, and left "em>" sitting in
+// the text as broken, visible markup. Skipping past whatever opening tags
+// come first means the drop cap span ends up correctly nested inside them
+// (e.g. "<em><span class="chapter-drop-cap">T</span>he smell...") instead
+// of splitting a tag in half.
 function markChapterFirstParagraph(html: string): string {
   const openTagMatch = /<p([^>]*)>/.exec(html);
   if (!openTagMatch || openTagMatch.index === undefined) return html;
 
   const [fullOpenTag, attrs] = openTagMatch;
   const before = html.slice(0, openTagMatch.index);
-  const after = html.slice(openTagMatch.index + fullOpenTag.length);
+  let after = html.slice(openTagMatch.index + fullOpenTag.length);
   const newOpenTag = `<p class="chapter-first-paragraph"${attrs}>`;
+
+  let leadingTags = "";
+  const leadingTagRe = /^<[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>/;
+  let leadingTagMatch: RegExpExecArray | null;
+  while ((leadingTagMatch = leadingTagRe.exec(after))) {
+    leadingTags += leadingTagMatch[0];
+    after = after.slice(leadingTagMatch[0].length);
+  }
 
   const unitMatch = /^(&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);|.)/u.exec(after);
   if (!unitMatch) {
-    // Empty paragraph, or text starts with a nested tag -- nothing safe to
-    // wrap, so just apply the text-indent-reset class and leave content as-is.
-    return `${before}${newOpenTag}${after}`;
+    // Empty paragraph, or text starts with something else unsafe to split
+    // (e.g. another nested tag right away) -- nothing safe to wrap, so
+    // just apply the text-indent-reset class and leave content as-is.
+    return `${before}${newOpenTag}${leadingTags}${after}`;
   }
 
   const firstUnit = unitMatch[0];
   const rest = after.slice(firstUnit.length);
-  return `${before}${newOpenTag}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
+  return `${before}${newOpenTag}${leadingTags}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
 function chapterHtml(chapter: EpubChapter, chapterNumber: number): string {
@@ -317,6 +338,10 @@ ${
   font-size: 3.6em;
   line-height: 0.82;
   font-weight: 700;
+  /* Stays upright even when it lands inside italicized opening text (e.g.
+     a prologue/flashback paragraph) -- a huge, floated italic letter reads
+     as a rendering glitch rather than a deliberate design choice. */
+  font-style: normal;
   padding-right: 0.08em;
   padding-top: 0.05em;
 }
