@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Users } from "lucide-react";
+import { BookOpen, Users, Timer } from "lucide-react";
 
 import { listProjectsWithStats } from "@/lib/actions/manuscript";
 import { getMyProfile } from "@/lib/actions/profile";
@@ -20,6 +20,13 @@ export default async function LibraryPage() {
           <p className="text-sm text-muted-foreground">Every book, all in one place.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/sprints"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <Timer className="size-4" />
+            Sprints
+          </Link>
           <Link
             href="/friends"
             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground"

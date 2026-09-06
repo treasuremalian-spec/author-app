@@ -51,5 +51,36 @@ export async function persistSceneContent(
       : []),
   ]);
 
+  await syncActiveSprintWordCount(savedById);
+
   return { wordCount };
+}
+
+/** If this writer is in a currently-ACTIVE sprint, refreshes their live
+ * word count there too -- this is what makes a sprint's word counts feel
+ * "real-time" without a separate tracking mechanism: every autosave
+ * doubles as a sprint tick. Best-effort/non-blocking: a hiccup here
+ * should never fail the actual scene save, which is why this awaits at
+ * the end rather than being part of the transaction above. */
+async function syncActiveSprintWordCount(userId: string): Promise<void> {
+  try {
+    const activeParticipations = (await prisma.sprintParticipant.findMany({
+      where: { userId, sprint: { status: "ACTIVE" } },
+      select: { id: true },
+    })) as { id: string }[];
+    if (activeParticipations.length === 0) return;
+
+    const agg = await prisma.scene.aggregate({
+      where: { node: { project: { userId } } },
+      _sum: { wordCount: true },
+    });
+    const total = agg._sum.wordCount ?? 0;
+
+    await prisma.sprintParticipant.updateMany({
+      where: { id: { in: activeParticipations.map((p) => p.id) } },
+      data: { currentWordCount: total },
+    });
+  } catch (err) {
+    console.error("Sprint word-count sync failed (non-blocking) for user", userId, err);
+  }
 }
