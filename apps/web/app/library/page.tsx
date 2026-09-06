@@ -1,13 +1,13 @@
 import { BookOpen } from "lucide-react";
 
 import { listProjectsWithStats } from "@/lib/actions/manuscript";
-import { signOut } from "@/lib/actions/auth";
+import { getMyProfile } from "@/lib/actions/profile";
 import { NewProjectDialog } from "@/components/manuscript/NewProjectDialog";
 import { LibraryWorkspace } from "@/components/library/LibraryWorkspace";
-import { Button } from "@/components/ui/button";
+import { ProfileMenu } from "@/components/profile/ProfileMenu";
 
 export default async function LibraryPage() {
-  const projects = await listProjectsWithStats();
+  const [projects, { profile }] = await Promise.all([listProjectsWithStats(), getMyProfile()]);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -18,11 +18,13 @@ export default async function LibraryPage() {
         </div>
         <div className="flex items-center gap-3">
           <NewProjectDialog />
-          <form action={signOut}>
-            <Button variant="ghost" type="submit" size="sm">
-              Log out
-            </Button>
-          </form>
+          {profile && (
+            <ProfileMenu
+              displayName={profile.displayName}
+              username={profile.username}
+              avatarUrl={profile.avatarUrl}
+            />
+          )}
         </div>
       </header>
 
