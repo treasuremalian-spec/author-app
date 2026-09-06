@@ -119,6 +119,21 @@ export async function renderPrintPdf(html: string): Promise<Buffer> {
       await w.PagedPolyfill.preview();
     });
 
+    // Puppeteer's page.pdf() forces the page into "print" media by
+    // default. Paged.js, though, does its actual pagination work (the
+    // .pagedjs_page boxes it just built above, each precisely sized to
+    // the real trim size) under "screen" media -- that's the CSS Paged.js
+    // itself is designed to run under, per its own docs and pagedjs-cli's
+    // own printing step. Without explicitly re-emulating "screen" here,
+    // Chromium's print pipeline ignores Paged.js's already-finished
+    // layout and falls back to its own generic print pagination against
+    // the underlying content, which is what caused the reported bug: the
+    // exported PDF's pages came out sized to fit the text instead of the
+    // real 5x8/6x9 trim size. Forcing "screen" here tells Chromium to
+    // print exactly the paginated boxes Paged.js already built, rather
+    // than re-deriving page breaks itself.
+    await page.emulateMediaType("screen");
+
     const pdf = await page.pdf({
       printBackground: true,
       preferCSSPageSize: true,
