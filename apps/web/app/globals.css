@@ -203,3 +203,66 @@ body {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Inline manuscript image node in the editor (Tiptap "manuscriptImage" --
+   see components/manuscript/extensions/manuscript-image.ts and its React
+   NodeView, manuscript-image-view.tsx). Three display-mode variants mirror
+   how the same image is styled on export (see print-html.ts /
+   build-epub.ts's own ".manuscript-image-figure--<mode>" rules): "header"
+   is modest and centered, "spread" is shown large (a full page on
+   export), "caption" is inline-photo sized with room for the caption
+   input underneath. The mode-switcher/delete control bar only appears
+   while the node is selected, so a page of images doesn't turn into a
+   wall of buttons. */
+.manuscript-image-node {
+  margin: 1em 0;
+  text-align: center;
+}
+.manuscript-image-node__img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.manuscript-image-node--header .manuscript-image-node__img {
+  max-width: 45%;
+}
+.manuscript-image-node--spread .manuscript-image-node__img {
+  max-width: 90%;
+}
+.manuscript-image-node--caption .manuscript-image-node__img {
+  max-width: 60%;
+}
+.manuscript-image-node--selected .manuscript-image-node__img {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.manuscript-image-node__controls {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: 0.625rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.manuscript-image-node__caption-input {
+  margin-top: 0.5rem;
+  width: 60%;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+  outline: none;
+}
+.manuscript-image-node__caption-input:focus {
+  color: var(--foreground);
+}

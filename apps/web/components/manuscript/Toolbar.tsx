@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
   Bold,
@@ -16,6 +17,8 @@ import {
   SeparatorHorizontal,
   Asterisk,
   MessageSquareText,
+  ImagePlus,
+  Loader2,
   Undo2,
   Redo2,
 } from "lucide-react";
@@ -28,6 +31,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SCENE_BREAK_OPTIONS } from "./extensions/scene-break";
+import { createClient } from "@/lib/supabase/client";
+import { recordManuscriptImage } from "@/lib/actions/manuscript-images";
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB -- same cap as the cover upload (CoverUploadButton.tsx)
 
 function ToolbarButton({
   onClick,
@@ -63,7 +70,74 @@ function Divider() {
   return <span className="mx-1 h-5 w-px shrink-0 bg-border" />;
 }
 
-export function EditorToolbar({ editor }: { editor: Editor }) {
+interface EditorToolbarProps {
+  editor: Editor;
+  projectId: string;
+  sceneId: string;
+}
+
+export function EditorToolbar({ editor, projectId, sceneId }: EditorToolbarProps) {
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  // Uploads straight from the browser to Supabase Storage (no server
+  // round-trip for the file bytes), exactly like CoverUploadButton.tsx --
+  // then inserts a "manuscriptImage" node at the cursor with the resulting
+  // public URL. A separate bucket ("manuscript-images", see
+  // supabase/migrations/0004_manuscript_images_storage.sql) from the cover
+  // bucket, since a book can have many of these rather than exactly one,
+  // so each upload gets a random filename rather than a fixed "cover.<ext>"
+  // path. Also records a best-effort MediaAsset row for future bookkeeping
+  // (see lib/actions/manuscript-images.ts) -- fire-and-forget, since a
+  // failure there should never block the image actually landing in the
+  // editor (the node's src is a plain public URL either way).
+  async function handleImageFile(file: File) {
+    setImageError(null);
+
+    if (!file.type.startsWith("image/")) {
+      setImageError("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError("That image is a bit large -- try one under 8MB.");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setImageError("You'll need to be logged in to add an image.");
+        return;
+      }
+
+      const extension = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `${user.id}/${projectId}/${crypto.randomUUID()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("manuscript-images")
+        .upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from("manuscript-images").getPublicUrl(path);
+      const url = publicUrlData.publicUrl;
+
+      editor.chain().focus().insertManuscriptImage({ src: url, alt: "", displayMode: "caption", caption: "" }).run();
+
+      recordManuscriptImage(projectId, sceneId, url).catch((err) => {
+        console.error("Couldn't record MediaAsset for inline image (non-blocking):", err);
+      });
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Couldn't upload that image -- try again.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-secondary/40 px-3 py-1.5">
       <ToolbarButton
@@ -214,6 +288,36 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Divider />
+
+      <div className="relative">
+        <ToolbarButton
+          label="Insert image"
+          disabled={uploadingImage}
+          onClick={() => imageInputRef.current?.click()}
+        >
+          {uploadingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+        </ToolbarButton>
+
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleImageFile(file);
+            e.target.value = "";
+          }}
+        />
+
+        {imageError && (
+          <p className="absolute left-1/2 top-full z-10 mt-1 w-max max-w-[12rem] -translate-x-1/2 text-center text-[11px] text-destructive">
+            {imageError}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

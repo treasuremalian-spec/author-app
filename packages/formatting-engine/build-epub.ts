@@ -5,7 +5,7 @@
 // environment and easy to reason about.
 
 import JSZip from "jszip";
-import { sceneContentToXhtml, isSceneContentEmpty, escapeXml } from "./tiptap-to-xhtml";
+import { sceneContentToXhtml, isSceneContentEmpty, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
 
 export interface EpubScene {
   id: string;
@@ -46,6 +46,13 @@ export interface EpubBookInput {
   sections: EpubSection[];
   /** The book's cover image, if one has been uploaded. Shown as the EPUB's actual cover on a real e-reader. */
   cover?: EpubCoverImage | null;
+  /** Every inline manuscript image referenced anywhere in this book's scene
+   * content (see the "manuscriptImage" node/case), keyed by the URL stored
+   * in each image node's "src" attribute -- the same Supabase Storage
+   * public URL the editor uploaded it to. Pre-fetched once, up front, and
+   * deduped by the caller (apps/web/lib/export-data.ts) so buildEpub/
+   * buildPrintHtml never need to make a network call themselves. */
+  images?: Record<string, EpubCoverImage>;
 }
 
 interface ManifestEntry {
@@ -109,11 +116,11 @@ function partPageHtml(part: EpubPart): string {
   );
 }
 
-function chapterPageHtml(chapter: EpubChapter): string {
+function chapterPageHtml(chapter: EpubChapter, ctx?: RenderContext): string {
   const nonEmptyScenes = chapter.scenes.filter((s) => !isSceneContentEmpty(s.content));
   const body = nonEmptyScenes
     .map((scene, i) => {
-      const html = sceneContentToXhtml(scene.content);
+      const html = sceneContentToXhtml(scene.content, ctx);
       const divider = i > 0 ? `  <p class="scene-break">&#8258;</p>\n` : "";
       return `${divider}${html}`;
     })
@@ -200,6 +207,43 @@ h1 + p,
 .text-message--center {
   margin-left: auto;
   margin-right: auto;
+}
+/* Inline manuscript images (see tiptap-to-xhtml.ts's "manuscriptImage"
+   case) -- same three display modes as the print CSS (print-html.ts
+   carries the fuller explanation of each). "spread" uses page-break-
+   before/after (not break-before/after alone) for the same older/wider
+   e-reader compatibility reasoning as .manual-page-break above -- EPUB is
+   reflowable, so "a full dedicated page" here means "surrounded by forced
+   breaks", not a fixed physical page the way print's is. */
+.manuscript-image-figure {
+  margin: 1em 0;
+  text-align: center;
+}
+.manuscript-image-figure .manuscript-image {
+  max-width: 100%;
+  height: auto;
+}
+.manuscript-image-figure--header .manuscript-image {
+  max-width: 50%;
+}
+.manuscript-image-figure--spread {
+  page-break-before: always;
+  break-before: page;
+  page-break-after: always;
+  break-after: page;
+}
+.manuscript-image-figure--spread .manuscript-image {
+  max-width: 100%;
+}
+.manuscript-image-figure--caption .manuscript-image {
+  max-width: 70%;
+}
+.manuscript-image-figure--caption figcaption {
+  margin-top: 0.5em;
+  font-style: italic;
+  font-size: 0.85em;
+  color: #555;
+  text-indent: 0;
 }
 .cover-page {
   margin: 0;
@@ -372,6 +416,29 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
 
   spineIds.push("title");
 
+  // Inline manuscript images: registered into the zip/manifest lazily, the
+  // first time chapterPageHtml's rendering actually asks for one -- keyed
+  // by the SAME Storage URL a "manuscriptImage" node stores, so an image
+  // reused across multiple scenes/chapters (copy-pasted, or intentionally
+  // reused) only gets zipped once and every reference points at that one
+  // manifest entry, rather than duplicating the bytes per use.
+  const imageFilenames = new Map<string, string>();
+  let imageCounter = 0;
+  function resolveImage(src: string): string | null {
+    const cached = imageFilenames.get(src);
+    if (cached) return cached;
+    const asset = book.images?.[src];
+    if (!asset) return null;
+    imageCounter += 1;
+    const id = `img-${imageCounter}`;
+    const filename = `images/${id}.${asset.extension}`;
+    oebps.file(filename, asset.bytes);
+    manifest.push({ id, filename, mediaType: asset.mimeType });
+    imageFilenames.set(src, filename);
+    return filename;
+  }
+  const renderCtx: RenderContext = { resolveImage };
+
   let chapterNumber = 0;
   let partNumber = 0;
 
@@ -379,7 +446,7 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
     chapterNumber += 1;
     const id = `chapter-${chapterNumber}`;
     const filename = `${id}.xhtml`;
-    oebps.file(filename, chapterPageHtml(chapter));
+    oebps.file(filename, chapterPageHtml(chapter, renderCtx));
     manifest.push({ id, filename, mediaType: "application/xhtml+xml" });
     spineIds.push(id);
     navEntries.push({ filename, title: chapter.title || `Chapter ${chapterNumber}`, isPart: false });

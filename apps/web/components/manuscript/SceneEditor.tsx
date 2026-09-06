@@ -12,6 +12,7 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import { PageBreak } from "./extensions/page-break";
 import { SceneBreak } from "./extensions/scene-break";
 import { TextMessage } from "./extensions/text-message";
+import { ManuscriptImage } from "./extensions/manuscript-image";
 
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ export function SceneEditor({
         PageBreak,
         SceneBreak,
         TextMessage,
+        ManuscriptImage,
       ],
       content: (initialContent as object) ?? EMPTY_DOC,
       immediatelyRender: false,
@@ -218,7 +220,7 @@ export function SceneEditor({
         </div>
       </div>
 
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} projectId={projectId} sceneId={sceneId} />
 
       <div className="flex-1 overflow-y-auto px-6 py-10 sm:px-10">
         <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card px-8 py-10 shadow-sm sm:px-14 sm:py-14">

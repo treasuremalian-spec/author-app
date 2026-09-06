@@ -31,7 +31,7 @@
 // matching the previous hardcoded behavior, so existing exports (no
 // options passed) are unchanged.
 
-import { sceneContentToXhtml, isSceneContentEmpty, escapeXml } from "./tiptap-to-xhtml";
+import { sceneContentToXhtml, isSceneContentEmpty, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection } from "./build-epub";
 import {
   CRIMSON_PRO_REGULAR,
@@ -73,9 +73,9 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   chapterStartsOnRight: false,
 };
 
-function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean): string {
+function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
   const divider = isFirstNonEmptyInChapter ? "" : `<p class="scene-break">⁂</p>\n`;
-  return `${divider}${sceneContentToXhtml(content)}`;
+  return `${divider}${sceneContentToXhtml(content, ctx)}`;
 }
 
 // Marks the very first paragraph of a chapter with an explicit class (for
@@ -175,13 +175,13 @@ function markChapterFirstParagraph(html: string): string {
   return `${before}${newOpenTag}${leadingTags}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
-function chapterHtml(chapter: EpubChapter, chapterNumber: number): string {
+function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx?: RenderContext): string {
   const label = chapter.title?.trim() || `Chapter ${chapterNumber}`;
   let seenFirstScene = false;
   const scenesHtml = chapter.scenes
     .filter((scene) => !isSceneContentEmpty(scene.content))
     .map((scene) => {
-      const html = sceneHtml(scene.content, !seenFirstScene);
+      const html = sceneHtml(scene.content, !seenFirstScene, ctx);
       seenFirstScene = true;
       return html;
     })
@@ -196,11 +196,11 @@ function chapterHtml(chapter: EpubChapter, chapterNumber: number): string {
 </section>`;
 }
 
-function partHtml(part: EpubPart, chapterNumberStart: number): { html: string; nextChapterNumber: number } {
+function partHtml(part: EpubPart, chapterNumberStart: number, ctx?: RenderContext): { html: string; nextChapterNumber: number } {
   let chapterNumber = chapterNumberStart;
   const chaptersHtml = part.chapters
     .map((chapter) => {
-      const html = chapterHtml(chapter, chapterNumber);
+      const html = chapterHtml(chapter, chapterNumber, ctx);
       chapterNumber += 1;
       return html;
     })
@@ -396,6 +396,61 @@ p {
   margin-left: auto;
   margin-right: auto;
 }
+/* Inline manuscript images (see tiptap-to-xhtml.ts's "manuscriptImage"
+   case and apps/web/components/manuscript/extensions/manuscript-image.ts)
+   -- three display modes a writer picks per image:
+     "header"  -- a modest, centered image (e.g. under a chapter title).
+                  No forced break; it sits wherever the writer placed it.
+     "spread"  -- a full dedicated page. break-before/after: page is the
+                  same mechanism .titlepage/.part-divider already use
+                  above. Fills the existing page's content area (inside
+                  the normal margins) rather than true edge-to-edge print
+                  bleed -- real bleed needs trim/bleed-box handling at the
+                  PDF-generation level, out of scope for this pass; noted
+                  here so a future pass knows this is a deliberate v1
+                  limit, not an oversight.
+     "caption" -- the default: an inline photo, modestly sized, with an
+                  optional <figcaption> underneath in small italic type
+                  (classic photo-insert style).
+   object-fit: contain (not cover) on every mode so an odd aspect ratio
+   never crops part of the writer's photo away without them asking for
+   that. */
+.manuscript-image-figure {
+  margin: 1em 0;
+  text-align: center;
+}
+.manuscript-image-figure .manuscript-image {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.manuscript-image-figure--header .manuscript-image {
+  max-width: 45%;
+}
+.manuscript-image-figure--spread {
+  break-before: page;
+  break-after: page;
+  margin: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.manuscript-image-figure--spread .manuscript-image {
+  max-width: 100%;
+  max-height: 100%;
+}
+.manuscript-image-figure--caption .manuscript-image {
+  max-width: 62%;
+}
+.manuscript-image-figure--caption figcaption {
+  margin-top: 0.5em;
+  font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.85em;
+  color: #555;
+  text-indent: 0;
+}
 h2, h3, h4, h5, h6 {
   font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
   text-indent: 0;
@@ -519,15 +574,30 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
   };
 
+  // Images are embedded as data: URIs -- a single in-memory HTML string
+  // (which is all Paged.js/Puppeteer render from, see render-pdf.ts) has
+  // nowhere else to point an <img src> at. book.images is pre-fetched by
+  // export-data.ts before buildPrintHtml is ever called, so this stays a
+  // synchronous lookup, not a network call. A miss (an image whose bytes
+  // couldn't be fetched at export time) fails soft -- see the
+  // "manuscriptImage" case in tiptap-to-xhtml.ts.
+  const ctx: RenderContext = {
+    resolveImage: (src) => {
+      const asset = book.images?.[src];
+      if (!asset) return null;
+      return `data:${asset.mimeType};base64,${Buffer.from(asset.bytes).toString("base64")}`;
+    },
+  };
+
   let chapterNumber = 1;
   const sectionsHtml = book.sections
     .map((section: EpubSection) => {
       if (section.kind === "part") {
-        const result = partHtml(section.part, chapterNumber);
+        const result = partHtml(section.part, chapterNumber, ctx);
         chapterNumber = result.nextChapterNumber;
         return result.html;
       }
-      const html = chapterHtml(section.chapter, chapterNumber);
+      const html = chapterHtml(section.chapter, chapterNumber, ctx);
       chapterNumber += 1;
       return html;
     })

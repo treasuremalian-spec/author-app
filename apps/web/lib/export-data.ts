@@ -6,7 +6,7 @@
 // server-only), so it's free to export whatever plain helpers it needs.
 
 import { prisma } from "@author-app/database";
-import type { EpubChapter, EpubCoverImage, EpubSection } from "@author-app/formatting-engine";
+import { collectImageUrls, type EpubChapter, type EpubCoverImage, type EpubSection } from "@author-app/formatting-engine";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
 import { buildTree, type ManuscriptNodeData, type TreeNode } from "@/lib/manuscript-tree";
 
@@ -43,6 +43,15 @@ export interface BookForExport {
   identifier: string;
   sections: EpubSection[];
   cover: EpubCoverImage | null;
+  /** Every inline manuscript image referenced anywhere in the book, keyed
+   * by its stored Supabase Storage public URL -- pre-fetched here (once,
+   * up front, deduped) so buildEpub/buildPrintHtml never need to make a
+   * network call of their own. See fetchImageAsset() below; a URL whose
+   * fetch failed is simply absent from this map, and the export pipelines
+   * already fail soft on a missing entry (the image -- and, since the
+   * bugfix in tiptap-to-xhtml.ts, its caption -- is dropped rather than
+   * shipping a broken reference). */
+  images: Record<string, EpubCoverImage>;
 }
 
 const MIME_TO_EXTENSION: Record<string, string> = {
@@ -52,11 +61,10 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "image/gif": "gif",
 };
 
-/** Fetches a cover image's real bytes so it can be embedded directly into an EPUB/PDF -- a stored URL alone is no use to an e-reader or a headless-browser-rendered PDF, both of which need the actual file. A missing or unreachable cover fails soft (the export still proceeds without one) rather than blocking the whole download. */
-async function loadCoverImage(coverImageUrl: string | null): Promise<EpubCoverImage | null> {
-  if (!coverImageUrl) return null;
+/** Fetches one image URL's real bytes, for embedding directly into an EPUB/PDF -- a stored URL alone is no use to an e-reader or a headless-browser-rendered PDF, both of which need the actual file. A missing or unreachable image fails soft (returns null) rather than blocking the whole export -- used for both the cover and every inline manuscript image. */
+async function fetchImageAsset(url: string): Promise<EpubCoverImage | null> {
   try {
-    const response = await fetch(coverImageUrl);
+    const response = await fetch(url);
     if (!response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
@@ -65,6 +73,35 @@ async function loadCoverImage(coverImageUrl: string | null): Promise<EpubCoverIm
   } catch {
     return null;
   }
+}
+
+async function loadCoverImage(coverImageUrl: string | null): Promise<EpubCoverImage | null> {
+  if (!coverImageUrl) return null;
+  return fetchImageAsset(coverImageUrl);
+}
+
+/** Walks every scene in the book's tree collecting inline "manuscriptImage" src URLs (see collectImageUrls()), dedupes them, and fetches each one's real bytes in parallel -- mirroring loadCoverImage's fetch-and-fail-soft pattern, just for however many inline images the writer has inserted rather than exactly one. A URL that fails to fetch is simply left out of the returned map (see the BookForExport.images doc comment for what that means downstream). */
+async function loadInlineImages(sections: EpubSection[]): Promise<Record<string, EpubCoverImage>> {
+  const urls = new Set<string>();
+  for (const section of sections) {
+    const chapters = section.kind === "part" ? section.part.chapters : [section.chapter];
+    for (const chapter of chapters) {
+      for (const scene of chapter.scenes) {
+        for (const url of collectImageUrls(scene.content)) {
+          urls.add(url);
+        }
+      }
+    }
+  }
+
+  const images: Record<string, EpubCoverImage> = {};
+  await Promise.all(
+    Array.from(urls).map(async (url) => {
+      const asset = await fetchImageAsset(url);
+      if (asset) images[url] = asset;
+    })
+  );
+  return images;
 }
 
 /** Loads a project's manuscript, checks ownership, and shapes it for either export format. */
@@ -125,7 +162,10 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     return { kind: "chapter" as const, chapter: toChapter(root) };
   });
 
-  const cover = await loadCoverImage(project.coverImageUrl);
+  const [cover, images] = await Promise.all([
+    loadCoverImage(project.coverImageUrl),
+    loadInlineImages(sections),
+  ]);
 
   return {
     title: project.title || "Untitled",
@@ -133,6 +173,7 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     identifier: `urn:author-app:${project.id}`,
     sections,
     cover,
+    images,
   };
 }
 

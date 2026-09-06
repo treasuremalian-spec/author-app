@@ -13,6 +13,20 @@ export interface DocNode {
   content?: DocNode[];
 }
 
+/** Passed down through rendering when a block type needs something an export
+ * pipeline can only provide, not this renderer-agnostic file -- currently
+ * just image resolution (see the "manuscriptImage" case below). print-html.ts
+ * and build-epub.ts each build their own resolveImage: print embeds a data:
+ * URI (a single in-memory HTML string has nowhere else to point), EPUB
+ * returns a relative path to a file it has zipped into the book, assigning
+ * one the first time a given URL is seen and deduping repeats. Returning
+ * null/undefined means "couldn't resolve this image" (a fetch failed during
+ * export, or the caller didn't supply resolveImage at all) -- callers should
+ * fail soft, same as the existing cover-image loading in export-data.ts. */
+export interface RenderContext {
+  resolveImage?: (src: string) => string | null | undefined;
+}
+
 export function escapeXml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
@@ -63,7 +77,7 @@ function renderInline(nodes: DocNode[] | undefined): string {
     .join("");
 }
 
-function renderBlock(node: DocNode): string {
+function renderBlock(node: DocNode, ctx?: RenderContext): string {
   switch (node.type) {
     case "paragraph": {
       const inner = renderInline(node.content);
@@ -80,13 +94,13 @@ function renderBlock(node: DocNode): string {
       return `<h${level}${textAlignStyle(node.attrs)}>${inner}</h${level}>`;
     }
     case "bulletList":
-      return `<ul>${(node.content ?? []).map(renderBlock).join("")}</ul>`;
+      return `<ul>${(node.content ?? []).map((c) => renderBlock(c, ctx)).join("")}</ul>`;
     case "orderedList":
-      return `<ol>${(node.content ?? []).map(renderBlock).join("")}</ol>`;
+      return `<ol>${(node.content ?? []).map((c) => renderBlock(c, ctx)).join("")}</ol>`;
     case "listItem":
-      return `<li>${(node.content ?? []).map(renderBlock).join("")}</li>`;
+      return `<li>${(node.content ?? []).map((c) => renderBlock(c, ctx)).join("")}</li>`;
     case "blockquote":
-      return `<blockquote>${(node.content ?? []).map(renderBlock).join("")}</blockquote>`;
+      return `<blockquote>${(node.content ?? []).map((c) => renderBlock(c, ctx)).join("")}</blockquote>`;
     case "codeBlock": {
       const text = (node.content ?? []).map((c) => c.text ?? "").join("");
       return `<pre><code>${escapeXml(text)}</code></pre>`;
@@ -129,18 +143,64 @@ function renderBlock(node: DocNode): string {
       const align = node.attrs?.textAlign === "center" || node.attrs?.textAlign === "right" ? node.attrs.textAlign : "left";
       return `<p class="text-message text-message--${align}">${inner || "&#160;"}</p>`;
     }
+    case "manuscriptImage": {
+      // A writer-inserted inline image (see
+      // apps/web/components/manuscript/extensions/manuscript-image.ts),
+      // one of three display modes the writer picks per image: "header"
+      // (a modest centered image, styled to sit under a chapter title),
+      // "spread" (a full dedicated page, print-html.ts forces a break
+      // before/after it), or "caption" (an inline photo with an optional
+      // caption line -- the default). ctx.resolveImage turns the node's
+      // stored Supabase Storage URL into whatever each export pipeline
+      // actually needs to embed (see RenderContext above); a miss (no ctx,
+      // or that URL's bytes couldn't be fetched at export time) fails soft
+      // by dropping the ENTIRE figure -- image and caption both -- rather
+      // than shipping a broken image reference or (worse) a caption
+      // floating with no photo above it, which would look like a bug to
+      // a reader rather than a missing-image edge case.
+      const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
+      const mode = node.attrs?.displayMode === "header" || node.attrs?.displayMode === "spread" ? node.attrs.displayMode : "caption";
+      const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
+      const captionText = typeof node.attrs?.caption === "string" ? node.attrs.caption.trim() : "";
+      const resolvedSrc = src && ctx?.resolveImage ? ctx.resolveImage(src) : null;
+      if (!resolvedSrc) return "";
+      const imgHtml = `<img class="manuscript-image" src="${escapeXml(resolvedSrc)}" alt="${escapeXml(alt)}"/>`;
+      const captionHtml = mode === "caption" && captionText ? `<figcaption>${escapeXml(captionText)}</figcaption>` : "";
+      return `<figure class="manuscript-image-figure manuscript-image-figure--${mode}">${imgHtml}${captionHtml}</figure>`;
+    }
     default:
       // Unknown block type -- render its children as paragraphs rather
       // than silently dropping content.
-      return (node.content ?? []).map(renderBlock).join("");
+      return (node.content ?? []).map((c) => renderBlock(c, ctx)).join("");
   }
 }
 
 /** Render a Scene's Tiptap document to a string of XHTML block elements. */
-export function sceneContentToXhtml(doc: unknown): string {
+export function sceneContentToXhtml(doc: unknown, ctx?: RenderContext): string {
   const root = doc as DocNode | null | undefined;
   if (!root || !Array.isArray(root.content)) return "";
-  return root.content.map(renderBlock).join("\n");
+  return root.content.map((node) => renderBlock(node, ctx)).join("\n");
+}
+
+/** Every image URL a Scene's Tiptap document references (via a
+ * "manuscriptImage" node's "src" attribute), in document order, duplicates
+ * included -- callers dedupe as needed. Used by export-data.ts to know
+ * which images to fetch bytes for before building either export format;
+ * kept here rather than in export-data.ts since it's the same document-tree
+ * walk sceneContentToXhtml already does, just collecting instead of
+ * rendering. */
+export function collectImageUrls(doc: unknown): string[] {
+  const root = doc as DocNode | null | undefined;
+  if (!root || !Array.isArray(root.content)) return [];
+  const urls: string[] = [];
+  const walk = (node: DocNode) => {
+    if (node.type === "manuscriptImage" && typeof node.attrs?.src === "string" && node.attrs.src) {
+      urls.push(node.attrs.src);
+    }
+    (node.content ?? []).forEach(walk);
+  };
+  root.content.forEach(walk);
+  return urls;
 }
 
 /** True if a scene's document has no real text in it (a blank/new scene). */
