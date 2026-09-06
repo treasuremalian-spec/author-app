@@ -11,6 +11,7 @@ import { Maximize2, Minimize2 } from "lucide-react";
 
 import { PageBreak } from "./extensions/page-break";
 import { SceneBreak } from "./extensions/scene-break";
+import { TextMessage } from "./extensions/text-message";
 
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
@@ -80,10 +81,11 @@ export function SceneEditor({
       extensions: [
         StarterKit,
         Underline,
-        TextAlign.configure({ types: ["heading", "paragraph"] }),
+        TextAlign.configure({ types: ["heading", "paragraph", "textMessage"] }),
         Placeholder.configure({ placeholder: "Start writing..." }),
         PageBreak,
         SceneBreak,
+        TextMessage,
       ],
       content: (initialContent as object) ?? EMPTY_DOC,
       immediatelyRender: false,

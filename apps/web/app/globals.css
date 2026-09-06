@@ -169,3 +169,37 @@ body {
   background: var(--secondary);
   color: var(--secondary-foreground);
 }
+
+/* Text-message ("chat") block in the manuscript editor (Tiptap
+   "textMessage" node -- see components/manuscript/extensions/
+   text-message.ts). A content-width "bubble" positioned left/right/
+   center via the EXISTING paragraph alignment buttons -- SceneEditor.tsx's
+   TextAlign extension is configured for this node type too, so the
+   normal align-left/align-center/align-right toolbar buttons work on it
+   directly. Uses "display: table" (sizes to its own content, capped by
+   max-width) rather than "display: inline-block", whose own box can't be
+   positioned by its own text-align -- only margin can move a box, hence
+   the attribute-selector rules below translating Tiptap's inline
+   style="text-align: ..." (which TextAlign always emits verbatim in this
+   form) into the matching margin. */
+.manuscript-text-message {
+  display: table;
+  max-width: 75%;
+  margin: 0.4em 0;
+  padding: 0.55em 0.9em;
+  border-radius: 1.1em;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  text-align: left;
+}
+.manuscript-text-message[style*="text-align: right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+.manuscript-text-message[style*="text-align: center"] {
+  margin-left: auto;
+  margin-right: auto;
+}

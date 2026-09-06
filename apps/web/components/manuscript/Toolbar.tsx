@@ -15,6 +15,7 @@ import {
   AlignRight,
   SeparatorHorizontal,
   Asterisk,
+  MessageSquareText,
   Undo2,
   Redo2,
 } from "lucide-react";
@@ -143,6 +144,13 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         <Quote className="size-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        label="Text message"
+        active={editor.isActive("textMessage")}
+        onClick={() => editor.chain().focus().toggleTextMessage().run()}
+      >
+        <MessageSquareText className="size-4" />
       </ToolbarButton>
 
       <Divider />

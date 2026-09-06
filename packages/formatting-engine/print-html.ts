@@ -117,7 +117,36 @@ function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean): string 
 // (e.g. "<em><span class="chapter-drop-cap">T</span>he smell...") instead
 // of splitting a tag in half.
 function markChapterFirstParagraph(html: string): string {
-  const openTagMatch = /<p([^>]*)>/.exec(html);
+  // Find the first ORDINARY body paragraph -- skip past any special-
+  // purpose <p> a chapter might happen to open with: a manual scene
+  // break's own <p class="scene-break"> (see the "sceneBreak" case in
+  // tiptap-to-xhtml.ts) or a text-message bubble's <p class="text-
+  // message ..."> (see the "textMessage" case there). Two reasons: (1)
+  // drop caps and the text-indent reset only make sense for real prose --
+  // wrapping an ornament glyph or a chat bubble's first character in a
+  // giant drop-cap span looks broken; (2) this function ADDS its own
+  // class="chapter-first-paragraph" attribute below, and simply
+  // prepending it in front of an EXISTING class="..." attribute would
+  // produce two "class=" attributes on one tag -- HTML's first-attribute-
+  // wins rule for duplicates then silently drops the special paragraph's
+  // own class, breaking its styling entirely. Confirmed 2026-09-06 via a
+  // real local render: a manual scene break placed as a chapter's literal
+  // first paragraph lost its ".scene-break" styling and had its "⁂"
+  // ornament wrapped in a drop-cap span before this fix.
+  //
+  // A real ordinary paragraph never carries a class attribute (only an
+  // optional inline style= for alignment -- see textAlignStyle above), so
+  // "the first classless <p>" is a safe, generic rule that also protects
+  // any future special paragraph type without needing another edit here.
+  const openTagRe = /<p([^>]*)>/g;
+  let match: RegExpExecArray | null;
+  let openTagMatch: RegExpExecArray | null = null;
+  while ((match = openTagRe.exec(html))) {
+    if (!/(^|\s)class=/.test(match[1])) {
+      openTagMatch = match;
+      break;
+    }
+  }
   if (!openTagMatch || openTagMatch.index === undefined) return html;
 
   const [fullOpenTag, attrs] = openTagMatch;
@@ -333,6 +362,39 @@ p {
   height: 0;
   margin: 0;
   padding: 0;
+}
+/* A "text conversation" bubble (see tiptap-to-xhtml.ts's "textMessage"
+   case and apps/web/components/manuscript/extensions/text-message.ts).
+   "display: table" sizes the box to its own content (capped by
+   max-width) rather than stretching full-width like a normal <p> --
+   the ".text-message--right"/"--center" modifier classes then move that
+   box with margin, since text-align only aligns content INSIDE a box,
+   not the box itself. Left is the unmodified default (margin: ... 0 0,
+   i.e. flush left already). A sans-serif face distinct from the serif
+   body text reads as "this is a phone screen", matching the convention
+   real printed books use for texting scenes. */
+.text-message {
+  display: table;
+  max-width: 72%;
+  margin: 0.5em 0;
+  padding: 0.55em 0.9em;
+  border-radius: 1.1em;
+  background: #ece6f0;
+  color: #1a1a1a;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 0.92em;
+  line-height: 1.35;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none;
+}
+.text-message--right {
+  margin-left: auto;
+  margin-right: 0;
+}
+.text-message--center {
+  margin-left: auto;
+  margin-right: auto;
 }
 h2, h3, h4, h5, h6 {
   font-family: "CrimsonPro", Georgia, "Times New Roman", serif;

@@ -174,6 +174,33 @@ h1 + p,
   page-break-after: always;
   break-after: page;
 }
+/* A "text conversation" bubble (see tiptap-to-xhtml.ts's "textMessage"
+   case) -- same "display: table" + margin positioning trick used in
+   print-html.ts, chosen over "display: inline-block" (whose own box
+   can't be moved by its own text-align) and picked deliberately for wide
+   e-reader compatibility over newer alternatives like "width: fit-content".
+   Left is the unmodified default (flush left already). */
+.text-message {
+  display: table;
+  max-width: 75%;
+  margin: 0.6em 0;
+  padding: 0.55em 0.9em;
+  border-radius: 1.1em;
+  background: #ece6f0;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 0.95em;
+  line-height: 1.4;
+  text-align: left;
+  text-indent: 0;
+}
+.text-message--right {
+  margin-left: auto;
+  margin-right: 0;
+}
+.text-message--center {
+  margin-left: auto;
+  margin-right: auto;
+}
 .cover-page {
   margin: 0;
   padding: 0;

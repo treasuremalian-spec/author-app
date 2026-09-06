@@ -113,6 +113,22 @@ function renderBlock(node: DocNode): string {
       const ornament = typeof node.attrs?.ornament === "string" ? node.attrs.ornament : "\u2042";
       return `<p class="scene-break">${escapeXml(ornament)}</p>`;
     }
+    case "textMessage": {
+      // A "text conversation" bubble (see
+      // apps/web/components/manuscript/extensions/text-message.ts) --
+      // written and edited like a normal paragraph, positioned
+      // left/center/right via the SAME textAlign attribute a normal
+      // paragraph uses. Rendered with an explicit "text-message--<side>"
+      // class (not textAlignStyle()'s inline style="text-align:...") --
+      // print-html.ts and build-epub.ts each position it with a
+      // `display: table` + margin rule keyed off that class, since a
+      // content-width "bubble" needs its own BOX moved left/right/center,
+      // which margin can do and text-align (an inline-content property,
+      // not a box-position one) cannot.
+      const inner = renderInline(node.content);
+      const align = node.attrs?.textAlign === "center" || node.attrs?.textAlign === "right" ? node.attrs.textAlign : "left";
+      return `<p class="text-message text-message--${align}">${inner || "&#160;"}</p>`;
+    }
     default:
       // Unknown block type -- render its children as paragraphs rather
       // than silently dropping content.
