@@ -343,7 +343,13 @@ ${
      as a rendering glitch rather than a deliberate design choice. */
   font-style: normal;
   padding-right: 0.08em;
-  padding-top: 0.05em;
+  /* Levels the top of the drop cap with the top of the first line of body
+     text next to it. Tuned empirically against Crimson Pro's real metrics
+     (measured the rendered gap directly in a real local PDF -- the
+     previous 0.05em left the cap sitting about 5.8pt too high) rather than
+     guessed, since this offset is specific to this font's vertical metrics
+     and would need re-tuning if the print font ever changes. */
+  padding-top: 0.19em;
 }
 `
     : ""
