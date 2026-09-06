@@ -166,6 +166,14 @@ h1 + p,
   margin: 1.5em 0;
   letter-spacing: 0.5em;
 }
+/* A writer-inserted manual page break (see tiptap-to-xhtml.ts's
+   "pageBreak" case). page-break-after is the older, most widely-supported
+   property across e-readers; break-after is the modern equivalent -- both
+   are included so a reader honors whichever it implements. */
+.manual-page-break {
+  page-break-after: always;
+  break-after: page;
+}
 .cover-page {
   margin: 0;
   padding: 0;

@@ -109,3 +109,42 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Manual page-break marker in the manuscript editor (Tiptap "pageBreak"
+   node -- see components/manuscript/extensions/page-break.ts). Purely a
+   visual affordance in the editor itself; the actual forced break is CSS
+   the export pipeline applies on its own (print-html.ts / build-epub.ts). */
+.manuscript-page-break {
+  position: relative;
+  height: 1.5rem;
+  margin: 1.25rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.manuscript-page-break::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--border);
+}
+.manuscript-page-break::after {
+  content: "Page Break";
+  position: relative;
+  background: var(--card);
+  padding: 0 0.6em;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+.manuscript-page-break.ProseMirror-selectednode::before {
+  border-top-color: var(--primary);
+}
+.manuscript-page-break.ProseMirror-selectednode::after {
+  color: var(--primary);
+}

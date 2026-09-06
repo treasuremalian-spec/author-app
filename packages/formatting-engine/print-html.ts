@@ -321,6 +321,19 @@ p {
   margin: 1em 0;
   letter-spacing: 0.3em;
 }
+/* A writer-inserted manual page break (see tiptap-to-xhtml.ts's
+   "pageBreak" case and apps/web/components/manuscript/extensions/
+   page-break.ts) -- an empty marker div that forces a real Paged.js page
+   break right after it, the same break-after mechanism already used
+   above for .titlepage/.part-divider. Distinct from the automatic
+   chapter/scene breaks elsewhere in this file: this one only exists
+   because the writer explicitly placed it mid-scene. */
+.manual-page-break {
+  break-after: page;
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
 h2, h3, h4, h5, h6 {
   font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
   text-indent: 0;

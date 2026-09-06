@@ -93,6 +93,14 @@ function renderBlock(node: DocNode): string {
     }
     case "horizontalRule":
       return `<hr/>`;
+    case "pageBreak":
+      // A writer-inserted manual page break (see
+      // apps/web/components/manuscript/extensions/page-break.ts). Renders
+      // as an empty marker div -- print-html.ts and build-epub.ts each
+      // turn it into a real forced break via CSS on ".manual-page-break"
+      // in their own stylesheets, so this file only has to emit the
+      // marker, not know how either export pipeline paginates.
+      return `<div class="manual-page-break"></div>`;
     default:
       // Unknown block type -- render its children as paragraphs rather
       // than silently dropping content.

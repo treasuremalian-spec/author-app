@@ -9,6 +9,8 @@ import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Maximize2, Minimize2 } from "lucide-react";
 
+import { PageBreak } from "./extensions/page-break";
+
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
 import { EditorToolbar } from "./Toolbar";
@@ -79,6 +81,7 @@ export function SceneEditor({
         Underline,
         TextAlign.configure({ types: ["heading", "paragraph"] }),
         Placeholder.configure({ placeholder: "Start writing..." }),
+        PageBreak,
       ],
       content: (initialContent as object) ?? EMPTY_DOC,
       immediatelyRender: false,

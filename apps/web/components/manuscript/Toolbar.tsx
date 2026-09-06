@@ -13,6 +13,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  SeparatorHorizontal,
   Undo2,
   Redo2,
 } from "lucide-react";
@@ -158,6 +159,16 @@ export function EditorToolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().setTextAlign("right").run()}
       >
         <AlignRight className="size-4" />
+      </ToolbarButton>
+
+      <Divider />
+
+      <ToolbarButton
+        label="Insert page break"
+        active={editor.isActive("pageBreak")}
+        onClick={() => editor.chain().focus().setPageBreak().run()}
+      >
+        <SeparatorHorizontal className="size-4" />
       </ToolbarButton>
     </div>
   );
