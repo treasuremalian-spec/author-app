@@ -16,12 +16,12 @@
 //    finished, paginated DOM before calling page.pdf().
 //
 // The sequencing below (disable Paged.js's auto-run via `PagedConfig.auto
-// = false` *before* the script loads, inject the polyfill, then manually
-// await `PagedPolyfill.preview()`) mirrors pagedjs-cli's own source
-// exactly, to avoid a real race condition: if Paged.js is left to
-// auto-run on the page's `load` event, and that event has already fired
-// by the time the script tag is added (which it usually has, since we
-// set the page's content ourselves), the polyfill never runs at all.
+// = false` *before* the polyfill script loads, then manually await
+// `PagedPolyfill.preview()` once) mirrors pagedjs-cli's own source, to
+// avoid Paged.js's own preview() running a second, uncontrolled time on
+// top of ours -- see the longer note further down (right above where
+// PagedConfig gets set) for the real, confirmed failure mode this guards
+// against, and why it matters even though it looks like a formality.
 //
 // IMPORTANT (see project memory's environment-constraints section): both
 // @sparticuz/chromium's compressed Chromium binary and the pagedjs
@@ -106,13 +106,45 @@ export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<
     // before the real @page sizing takes over.
     await page.setViewport({ width: 1200, height: 1600 });
 
-    // Must be registered before the polyfill script loads -- see the note
-    // above about the auto-run race.
-    await page.evaluateOnNewDocument(() => {
-      (window as unknown as { PagedConfig?: { auto: boolean } }).PagedConfig = { auto: false };
-    });
-
     await page.setContent(html, { waitUntil: "domcontentloaded" });
+
+    // Tell Paged.js not to auto-run its own preview() on page load, since
+    // we trigger it ourselves below and need to await its result directly.
+    //
+    // This USED to be a page.evaluateOnNewDocument() call registered
+    // before setContent(), on the theory (stated in the comment that used
+    // to be here) that it "must run before the polyfill script loads."
+    // That theory was wrong in a way that silently broke everything below
+    // it: page.evaluateOnNewDocument() only re-runs its script on each
+    // subsequent *navigation* (a real page.goto()) -- page.setContent()
+    // does NOT count as a navigation for this purpose, so the script
+    // registered there was never actually applied to this page at all.
+    // Confirmed 2026-09-06 by reproducing this whole pipeline locally
+    // (this cloud sandbox's Chromium is the same architecture as
+    // production's, unlike the user's Mac) and instrumenting
+    // Node.prototype.appendChild to log a stack trace on every <style>
+    // insertion: with the old code, Paged.js's own preview() ran TWICE --
+    // once auto-triggered on load (because window.PagedConfig was in fact
+    // still its default {auto: true}, the evaluateOnNewDocument script
+    // having silently never applied), and a second time from our own
+    // explicit call below. The first run correctly parsed our @page
+    // { size: ... } rule; the second run's setup() then re-inserted Paged.js's
+    // own DEFAULT 8.5in x 11in page-size stylesheet, which (later in
+    // source order, equal CSS specificity) silently overrode the correct
+    // page dimensions right back to US Letter -- while also leaving the
+    // running-footer page number mis-measured against the wrong page
+    // height, since it re-chunked the already-paginated DOM as if it were
+    // the original flow. This is why the page size and footer position
+    // bugs (see the "5x8/6x9 came out as Letter" and "page number floats
+    // mid-page" history in project memory) survived earlier fixes that
+    // looked complete but were never verified against a real local
+    // reproduction.
+    //
+    // The fix: set PagedConfig via an actual injected script tag, run
+    // in-page via addScriptTag (which we can order and await directly),
+    // instead of depending on evaluateOnNewDocument's document-lifecycle
+    // semantics at all.
+    await page.addScriptTag({ content: "window.PagedConfig = { auto: false };" });
     await page.addScriptTag({ content: loadPagedPolyfillSource() });
 
     await page.evaluate(async () => {
