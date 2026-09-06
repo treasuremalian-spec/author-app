@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Loader2 } from "lucide-react";
 
-import { createSprint, SPRINT_DURATIONS_MINUTES } from "@/lib/actions/sprints";
+import { createSprint } from "@/lib/actions/sprints";
+import { SPRINT_DURATIONS_MINUTES } from "@/lib/sprint-constants";
 import type { FriendItem } from "@/lib/actions/friends";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

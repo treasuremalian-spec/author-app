@@ -11,8 +11,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@author-app/database";
 import { requireUser } from "@/lib/actions/shared";
 import { effectivePresence, type EffectivePresence } from "@/lib/presence";
-
-export const SPRINT_DURATIONS_MINUTES = [15, 25, 45, 60] as const;
+import { SPRINT_DURATIONS_MINUTES } from "@/lib/sprint-constants";
 
 type SprintRow = {
   id: string;
