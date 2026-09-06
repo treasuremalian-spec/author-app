@@ -22,6 +22,14 @@
 // reference book despite having correct page size and margins.
 // Confirmed 2026-09-06 by inspecting a real exported PDF's embedded font
 // resource names directly.
+//
+// PrintOptions (added 2026-09-06, Phase 15) exposes a handful of
+// print-typesetting choices Vellum offers that were previously hardcoded:
+// mirrored inside/outside margins, whether paragraphs are indented, line
+// spacing, drop caps at chapter starts, and whether every chapter is
+// forced to start on a right-hand page. All are optional with defaults
+// matching the previous hardcoded behavior, so existing exports (no
+// options passed) are unchanged.
 
 import { sceneContentToXhtml, isSceneContentEmpty, escapeXml } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection } from "./build-epub";
@@ -43,9 +51,78 @@ export interface PrintBookInput extends EpubBookInput {
   trimSize: TrimSize;
 }
 
+/** Print-typesetting options -- see the file-level comment above. Every field is optional; omitted fields fall back to DEFAULT_PRINT_OPTIONS, which match this file's previous hardcoded behavior. */
+export interface PrintOptions {
+  /** Bigger margin toward the spine (inside) than the outside edge, alternating by page side, instead of equal margins on every page. */
+  mirroredMargins?: boolean;
+  /** Indent the first line of each paragraph. When false, paragraphs are set block-style with a small gap between them instead. */
+  indentParagraphs?: boolean;
+  /** Body text line-height multiplier. */
+  lineSpacing?: number;
+  /** Enlarge the first letter of each chapter's opening paragraph into a drop cap. */
+  dropCaps?: boolean;
+  /** Force every chapter (and part) to start on a right-hand page, inserting a blank page when needed. */
+  chapterStartsOnRight?: boolean;
+}
+
+const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
+  mirroredMargins: false,
+  indentParagraphs: true,
+  lineSpacing: 1.5,
+  dropCaps: false,
+  chapterStartsOnRight: false,
+};
+
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean): string {
   const divider = isFirstNonEmptyInChapter ? "" : `<p class="scene-break">⁂</p>\n`;
   return `${divider}${sceneContentToXhtml(content)}`;
+}
+
+// Marks the very first paragraph of a chapter with an explicit class (for
+// the text-indent reset), and wraps its literal first character in its
+// own <span> for the drop cap -- rather than a ".chapter-start +
+// p::first-letter" pseudo-element selector, which silently failed in a
+// real local test render (confirmed 2026-09-06). Digging further (also
+// 2026-09-06) found the real cause is broader than that first guess:
+// Paged.js ships a built-in stylesheet rule that force-resets
+// "::first-letter" styling (font-size, float, etc back to "unset") on any
+// element it treats as continuing/starting fresh content on a new page --
+// which, empirically, includes the first element Paged.js flows onto a
+// page after a CSS-forced break-before, not just an actual paragraph
+// split. Since our chapter-opening paragraph is always exactly that (it
+// always follows a break-before on the preceding chapter-start element),
+// no ::first-letter selector was ever going to survive there. Wrapping
+// the first character in a real <span> sidesteps the problem entirely --
+// it's a literal element, not a pseudo-element, so Paged.js's reset rule
+// (which is scoped to "::first-letter" specifically) never touches it.
+//
+// The "first letter" is extracted unit-aware: scene content is passed
+// through escapeXml before it ever reaches here, so a paragraph starting
+// with an apostrophe, quote, or ampersand may begin with a multi-character
+// HTML entity (e.g. "&#39;") rather than a single literal character --
+// splitting on raw string index would cut an entity in half and corrupt
+// the HTML. The regex below grabs a whole entity when present, otherwise
+// one Unicode character (the "u" flag keeps astral-plane characters, like
+// some emoji, intact rather than splitting a surrogate pair).
+function markChapterFirstParagraph(html: string): string {
+  const openTagMatch = /<p([^>]*)>/.exec(html);
+  if (!openTagMatch || openTagMatch.index === undefined) return html;
+
+  const [fullOpenTag, attrs] = openTagMatch;
+  const before = html.slice(0, openTagMatch.index);
+  const after = html.slice(openTagMatch.index + fullOpenTag.length);
+  const newOpenTag = `<p class="chapter-first-paragraph"${attrs}>`;
+
+  const unitMatch = /^(&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);|.)/u.exec(after);
+  if (!unitMatch) {
+    // Empty paragraph, or text starts with a nested tag -- nothing safe to
+    // wrap, so just apply the text-indent-reset class and leave content as-is.
+    return `${before}${newOpenTag}${after}`;
+  }
+
+  const firstUnit = unitMatch[0];
+  const rest = after.slice(firstUnit.length);
+  return `${before}${newOpenTag}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
 function chapterHtml(chapter: EpubChapter, chapterNumber: number): string {
@@ -59,12 +136,13 @@ function chapterHtml(chapter: EpubChapter, chapterNumber: number): string {
       return html;
     })
     .join("\n");
+  const markedScenesHtml = markChapterFirstParagraph(scenesHtml);
 
   return `<section class="chapter">
   <div class="chapter-start">
     <h1 class="chapter-title">${escapeXml(label)}</h1>
   </div>
-  ${scenesHtml}
+  ${markedScenesHtml}
 </section>`;
 }
 
@@ -87,8 +165,23 @@ ${chaptersHtml}`;
   return { html, nextChapterNumber: chapterNumber };
 }
 
-function buildCss(trimSize: TrimSize): string {
+function buildCss(trimSize: TrimSize, options: Required<PrintOptions>): string {
   const { width, height } = TRIM_SIZE_DIMENSIONS[trimSize];
+  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight } = options;
+
+  // Base margins (top/right/bottom/left), used as-is when mirroredMargins
+  // is off. When it's on, left/right are instead driven by the :left/
+  // :right page-side rules below, with a slightly bigger inside (spine)
+  // margin than outside -- matching real print-book convention (and
+  // roughly what a real Vellum-exported reference book measured at:
+  // ~0.875in inside / ~0.62in outside, confirmed 2026-09-06).
+  const marginTop = "0.8in";
+  const marginBottom = "0.9in";
+  const marginOutside = "0.6in";
+  const marginInside = "0.85in";
+  const baseMargin = mirroredMargins ? "" : `margin: ${marginTop} 0.65in ${marginBottom} 0.65in;`;
+  const chapterBreak = chapterStartsOnRight ? "recto" : "page";
+
   return `
 /* Embedded print font (Crimson Pro, SIL Open Font License) -- see
    fonts-embedded.ts for why this is embedded as font data rather than
@@ -119,7 +212,7 @@ function buildCss(trimSize: TrimSize): string {
 }
 @page {
   size: ${width} ${height};
-  margin: 0.8in 0.65in 0.9in 0.65in;
+  ${baseMargin}
   @top-center {
     content: string(chaptertitle);
     font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
@@ -134,6 +227,20 @@ function buildCss(trimSize: TrimSize): string {
     font-size: 9pt;
     color: #333;
   }
+}
+${
+  mirroredMargins
+    ? `/* Recto (right-hand) pages: spine is on the left, so the inside
+   margin is the LEFT margin. Verso (left-hand) pages: spine is on the
+   right, so the inside margin is the RIGHT margin. */
+@page :right {
+  margin: ${marginTop} ${marginOutside} ${marginBottom} ${marginInside};
+}
+@page :left {
+  margin: ${marginTop} ${marginInside} ${marginBottom} ${marginOutside};
+}
+`
+    : ""
 }
 @page :first {
   @top-center { content: none; }
@@ -154,18 +261,20 @@ html, body {
 body {
   font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
   font-size: 11.5pt;
-  line-height: 1.5;
+  line-height: ${lineSpacing};
   color: #1a1a1a;
 }
 p {
   margin: 0;
   text-align: justify;
-  text-indent: 1.5em;
+  text-indent: ${indentParagraphs ? "1.5em" : "0"};
   orphans: 2;
   widows: 2;
   hyphens: auto;
+  ${indentParagraphs ? "" : `margin-bottom: 0.9em;`}
 }
 .chapter-start + p,
+.chapter-first-paragraph,
 .scene-break + p {
   text-indent: 0;
 }
@@ -180,10 +289,27 @@ h2, h3, h4, h5, h6 {
   text-indent: 0;
   margin: 1em 0 0.5em;
 }
+${
+  dropCaps
+    ? `/* Drop cap on each chapter's opening paragraph. This targets a real
+   <span> (see markChapterFirstParagraph in this file) rather than a
+   ::first-letter pseudo-element -- Paged.js resets ::first-letter styling
+   on content that starts a fresh page after a forced break, which is
+   exactly what this paragraph always is. */
+.chapter-drop-cap {
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.82;
+  font-weight: 700;
+  padding-right: 0.08em;
+  padding-top: 0.05em;
+}
+`
+    : ""
+}
 
 .titlepage, .part-divider {
   page: titlepage;
-  break-before: page;
   break-after: page;
   height: 100%;
   display: flex;
@@ -191,6 +317,13 @@ h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+.titlepage {
+  /* Always the very first page -- no need for recto/verso logic here. */
+  break-before: page;
+}
+.part-divider {
+  break-before: ${chapterBreak};
 }
 .titlepage h1 {
   font-size: 26pt;
@@ -216,7 +349,7 @@ h2, h3, h4, h5, h6 {
 }
 
 .chapter-start {
-  break-before: page;
+  break-before: ${chapterBreak};
   page: chapterstart;
   padding-top: 1.6in;
   text-align: center;
@@ -233,7 +366,20 @@ h2, h3, h4, h5, h6 {
 }
 
 /** Builds the full print-ready HTML document Paged.js will paginate. */
-export function buildPrintHtml(book: PrintBookInput): string {
+export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {}): string {
+  // Merge field-by-field with ?? rather than a blanket object spread --
+  // callers (like the PDF export route, parsing optional query params)
+  // may pass a key explicitly set to `undefined` rather than omitting it,
+  // and {...DEFAULT, ...options} would let that undefined silently
+  // clobber the default instead of falling back to it.
+  const resolved: Required<PrintOptions> = {
+    mirroredMargins: options.mirroredMargins ?? DEFAULT_PRINT_OPTIONS.mirroredMargins,
+    indentParagraphs: options.indentParagraphs ?? DEFAULT_PRINT_OPTIONS.indentParagraphs,
+    lineSpacing: options.lineSpacing ?? DEFAULT_PRINT_OPTIONS.lineSpacing,
+    dropCaps: options.dropCaps ?? DEFAULT_PRINT_OPTIONS.dropCaps,
+    chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
+  };
+
   let chapterNumber = 1;
   const sectionsHtml = book.sections
     .map((section: EpubSection) => {
@@ -253,7 +399,7 @@ export function buildPrintHtml(book: PrintBookInput): string {
 <head>
 <meta charset="utf-8"/>
 <title>${escapeXml(book.title)}</title>
-<style>${buildCss(book.trimSize)}</style>
+<style>${buildCss(book.trimSize, resolved)}</style>
 </head>
 <body>
 <section class="titlepage">

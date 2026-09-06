@@ -7,7 +7,7 @@
 // memory for why (Paged.js pagination of a full novel is genuinely slow
 // compared to the EPUB export, which is near-instant string building).
 import { NextRequest, NextResponse } from "next/server";
-import { buildPrintHtml, renderPrintPdf, type TrimSize } from "@author-app/formatting-engine";
+import { buildPrintHtml, renderPrintPdf, type TrimSize, type PrintOptions } from "@author-app/formatting-engine";
 import { loadBookForExport, safeBookFilename } from "@/lib/export-data";
 
 export const runtime = "nodejs";
@@ -17,16 +17,44 @@ function parseTrimSize(value: string | null): TrimSize {
   return value === "5x8" ? "5x8" : "6x9";
 }
 
+// Print options (Phase 15) come from query params set by ExportCard.tsx's
+// checkboxes/select -- each is optional and falls back to buildPrintHtml's
+// own defaults (matching the pre-Phase-15 hardcoded behavior) when absent
+// or unparseable, so an old/cached export link without these params still
+// works exactly as before.
+function parseBoolParam(value: string | null): boolean | undefined {
+  if (value === null) return undefined;
+  return value === "1" || value === "true";
+}
+
+function parseLineSpacing(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1 || n > 3) return undefined;
+  return n;
+}
+
+function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
+  return {
+    mirroredMargins: parseBoolParam(searchParams.get("mirroredMargins")),
+    indentParagraphs: parseBoolParam(searchParams.get("indentParagraphs")),
+    dropCaps: parseBoolParam(searchParams.get("dropCaps")),
+    chapterStartsOnRight: parseBoolParam(searchParams.get("chapterStartsOnRight")),
+    lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
   const trimSize = parseTrimSize(request.nextUrl.searchParams.get("trim"));
+  const printOptions = parsePrintOptions(request.nextUrl.searchParams);
 
   try {
     const book = await loadBookForExport(projectId);
-    const html = buildPrintHtml({ ...book, trimSize });
+    const html = buildPrintHtml({ ...book, trimSize }, printOptions);
     const pdf = await renderPrintPdf(html, trimSize);
 
     const safeFilename = safeBookFilename(book.title);
