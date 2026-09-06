@@ -1,6 +1,9 @@
 // Builds one complete, self-contained HTML document for a book's print
-// edition: a title page, part dividers, and chapters with running headers,
-// page numbers, and chapter-start pages -- using standard CSS Paged Media
+// edition: a title page (no cover image -- print/PDF export is
+// deliberately cover-less, per author request; the EPUB export is the
+// one that gets the cover, see build-epub.ts), part dividers, and
+// chapters with running headers, page numbers, and chapter-start pages --
+// using standard CSS Paged Media
 // rules (@page, string-set, named pages) that the Paged.js polyfill (see
 // render-pdf.ts) turns into real, fixed-size, paginated pages before we
 // hand the result to a real headless browser to print as a PDF.
@@ -97,11 +100,6 @@ function buildCss(trimSize: TrimSize): string {
   @top-center { content: none; }
   @bottom-center { content: none; }
 }
-@page cover {
-  margin: 0;
-  @top-center { content: none; }
-  @bottom-center { content: none; }
-}
 @page chapterstart {
   @top-center { content: none; }
 }
@@ -140,18 +138,6 @@ h2, h3, h4, h5, h6 {
   margin: 1em 0 0.5em;
 }
 
-.cover-page {
-  page: cover;
-  break-after: page;
-  margin: 0;
-  padding: 0;
-}
-.cover-page img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 .titlepage, .part-divider {
   page: titlepage;
   break-before: page;
@@ -227,10 +213,7 @@ export function buildPrintHtml(book: PrintBookInput): string {
 <style>${buildCss(book.trimSize)}</style>
 </head>
 <body>
-${book.cover ? `<section class="cover-page">
-  <img src="data:${book.cover.mimeType};base64,${Buffer.from(book.cover.bytes).toString("base64")}" alt=""/>
-</section>
-` : ""}<section class="titlepage">
+<section class="titlepage">
   <h1>${escapeXml(book.title)}</h1>
   <p class="byline">${escapeXml(book.author)}</p>
 </section>
