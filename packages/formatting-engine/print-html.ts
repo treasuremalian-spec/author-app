@@ -336,7 +336,16 @@ ${
 .chapter-drop-cap {
   float: left;
   font-size: 3.6em;
-  line-height: 0.82;
+  /* line-height: 1 (rather than a fraction like 0.82) is what makes the
+     cap's own box height land close to a clean 2-line span at this
+     font-size -- the earlier 0.82 was tuned by feel, not measured, and
+     combined with a padding-top nudge to "fix" the resulting misalignment,
+     it actually made things worse: confirmed 2026-09-06 from a real user
+     screenshot showing the letter sitting a full ~28pt too low (verified
+     by pixel-measuring the actual rendered ink, not PDF text-run bounding
+     boxes -- those reflect font ascent metrics, not where the glyph's
+     ink visually starts, which is what had thrown off the earlier fix). */
+  line-height: 1;
   font-weight: 700;
   /* Stays upright even when it lands inside italicized opening text (e.g.
      a prologue/flashback paragraph) -- a huge, floated italic letter reads
@@ -344,12 +353,13 @@ ${
   font-style: normal;
   padding-right: 0.08em;
   /* Levels the top of the drop cap with the top of the first line of body
-     text next to it. Tuned empirically against Crimson Pro's real metrics
-     (measured the rendered gap directly in a real local PDF -- the
-     previous 0.05em left the cap sitting about 5.8pt too high) rather than
-     guessed, since this offset is specific to this font's vertical metrics
-     and would need re-tuning if the print font ever changes. */
-  padding-top: 0.19em;
+     text next to it -- tuned empirically against Crimson Pro's real
+     metrics by pixel-measuring the actual rendered ink in a real local
+     PDF (not guessed, and not from PDF text-run bounding boxes, which
+     misled the previous attempt at this). Margin, not padding, since the
+     needed nudge is upward and padding cannot go negative. Would need
+     re-tuning if the print font ever changes. */
+  margin-top: -0.16em;
 }
 `
     : ""
