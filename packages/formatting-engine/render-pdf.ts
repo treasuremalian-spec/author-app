@@ -108,6 +108,16 @@ export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<
 
     await page.setContent(html, { waitUntil: "domcontentloaded" });
 
+    // Wait for the embedded print font (see fonts-embedded.ts /
+    // print-html.ts) to actually finish loading before Paged.js measures
+    // and paginates the text. Without this, Paged.js could lay out (and
+    // page-break) the book against a fallback font's metrics while the
+    // real font is still decoding, which would make its line/page breaks
+    // wrong for the font that actually ends up rendered.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+
     // Tell Paged.js not to auto-run its own preview() on page load, since
     // we trigger it ourselves below and need to await its result directly.
     //

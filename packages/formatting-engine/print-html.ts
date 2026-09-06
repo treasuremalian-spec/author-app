@@ -12,9 +12,25 @@
 // files (unlike the EPUB build) -- Paged.js needs the whole book in one
 // flow to paginate it correctly, with page breaks as a side effect of
 // CSS rather than a structural choice we make ourselves.
+//
+// Body text uses an embedded font (Crimson Pro, see fonts-embedded.ts)
+// rather than naming Georgia/Times and hoping the renderer has them --
+// @sparticuz/chromium's serverless Chromium build has no such fonts
+// installed, and was silently substituting a generic sans-serif for
+// every character, which is why print exports looked visibly different
+// (lighter, airier, sans-serif) from a same-size Vellum-exported
+// reference book despite having correct page size and margins.
+// Confirmed 2026-09-06 by inspecting a real exported PDF's embedded font
+// resource names directly.
 
 import { sceneContentToXhtml, isSceneContentEmpty, escapeXml } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection } from "./build-epub";
+import {
+  CRIMSON_PRO_REGULAR,
+  CRIMSON_PRO_ITALIC,
+  CRIMSON_PRO_BOLD,
+  CRIMSON_PRO_BOLD_ITALIC,
+} from "./fonts-embedded";
 
 export type TrimSize = "5x8" | "6x9";
 
@@ -74,12 +90,39 @@ ${chaptersHtml}`;
 function buildCss(trimSize: TrimSize): string {
   const { width, height } = TRIM_SIZE_DIMENSIONS[trimSize];
   return `
+/* Embedded print font (Crimson Pro, SIL Open Font License) -- see
+   fonts-embedded.ts for why this is embedded as font data rather than
+   left as a font-family name for the renderer to resolve on its own. */
+@font-face {
+  font-family: "CrimsonPro";
+  font-style: normal;
+  font-weight: 400;
+  src: url(data:font/woff2;base64,${CRIMSON_PRO_REGULAR}) format("woff2");
+}
+@font-face {
+  font-family: "CrimsonPro";
+  font-style: italic;
+  font-weight: 400;
+  src: url(data:font/woff2;base64,${CRIMSON_PRO_ITALIC}) format("woff2");
+}
+@font-face {
+  font-family: "CrimsonPro";
+  font-style: normal;
+  font-weight: 700;
+  src: url(data:font/woff2;base64,${CRIMSON_PRO_BOLD}) format("woff2");
+}
+@font-face {
+  font-family: "CrimsonPro";
+  font-style: italic;
+  font-weight: 700;
+  src: url(data:font/woff2;base64,${CRIMSON_PRO_BOLD_ITALIC}) format("woff2");
+}
 @page {
   size: ${width} ${height};
   margin: 0.8in 0.65in 0.9in 0.65in;
   @top-center {
     content: string(chaptertitle);
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
     font-size: 8.5pt;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -87,7 +130,7 @@ function buildCss(trimSize: TrimSize): string {
   }
   @bottom-center {
     content: counter(page);
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
     font-size: 9pt;
     color: #333;
   }
@@ -109,7 +152,7 @@ html, body {
   padding: 0;
 }
 body {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
   font-size: 11.5pt;
   line-height: 1.5;
   color: #1a1a1a;
@@ -133,7 +176,7 @@ p {
   letter-spacing: 0.3em;
 }
 h2, h3, h4, h5, h6 {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
   text-indent: 0;
   margin: 1em 0 0.5em;
 }
