@@ -12,6 +12,7 @@ export function ProjectNavTabs({ projectId }: { projectId: string }) {
     { href: `/projects/${projectId}`, label: "Write" },
     { href: `/projects/${projectId}/overview`, label: "Overview" },
     { href: `/projects/${projectId}/story-bible`, label: "Story Bible" },
+    { href: `/projects/${projectId}/format`, label: "Format & Export" },
   ];
 
   return (

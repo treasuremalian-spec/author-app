@@ -13,6 +13,14 @@
 // since a writer changing their mind about how an already-placed image
 // should read is just an attribute change, not a delete-and-reinsert.
 //
+// "align" and "widthPercent" (added 2026-09-07, per author request) let a
+// writer center/left/right an image and shrink it from its display mode's
+// default size -- deliberately only meaningful (and only exposed in the
+// editor UI, see ./manuscript-image-view.tsx) for "header"/"caption"
+// images; a "spread" image always fills the whole page by definition, so
+// these two attributes are simply ignored for it (see the "manuscriptImage"
+// case in tiptap-to-xhtml.ts).
+//
 // Atomic (holds no editable text content of its own -- an image plus a
 // short caption STRING attribute, not nested rich content) and rendered
 // via a React NodeView (see ./manuscript-image-view.tsx) rather than plain
@@ -30,12 +38,15 @@ import { ReactNodeViewRenderer } from "@tiptap/react";
 import { ManuscriptImageView } from "./manuscript-image-view";
 
 export type ManuscriptImageDisplayMode = "header" | "spread" | "caption";
+export type ManuscriptImageAlign = "left" | "center" | "right";
 
 export interface ManuscriptImageAttrs {
   src: string;
   alt?: string;
   displayMode?: ManuscriptImageDisplayMode;
   caption?: string;
+  align?: ManuscriptImageAlign;
+  widthPercent?: number | null;
 }
 
 export interface ManuscriptImageOptions {
@@ -50,6 +61,14 @@ declare module "@tiptap/core" {
     };
   }
 }
+
+export const MANUSCRIPT_IMAGE_WIDTH_PRESETS: { label: string; value: number | null }[] = [
+  { label: "Default size", value: null },
+  { label: "Small", value: 35 },
+  { label: "Medium", value: 55 },
+  { label: "Large", value: 80 },
+  { label: "Full width", value: 100 },
+];
 
 export const ManuscriptImage = Node.create<ManuscriptImageOptions>({
   name: "manuscriptImage",
@@ -76,6 +95,20 @@ export const ManuscriptImage = Node.create<ManuscriptImageOptions>({
         default: "",
         parseHTML: (element) => element.getAttribute("data-caption") || "",
         renderHTML: (attrs) => (attrs.caption ? { "data-caption": attrs.caption } : {}),
+      },
+      align: {
+        default: "center",
+        parseHTML: (element) => element.getAttribute("data-align") || "center",
+        renderHTML: (attrs) => (attrs.align && attrs.align !== "center" ? { "data-align": attrs.align } : {}),
+      },
+      widthPercent: {
+        default: null,
+        parseHTML: (element) => {
+          const raw = element.getAttribute("data-width-percent");
+          const n = raw ? Number(raw) : NaN;
+          return Number.isFinite(n) ? n : null;
+        },
+        renderHTML: (attrs) => (attrs.widthPercent ? { "data-width-percent": String(attrs.widthPercent) } : {}),
       },
     };
   },

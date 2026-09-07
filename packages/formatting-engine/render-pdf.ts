@@ -34,7 +34,11 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import fs from "node:fs";
 import path from "node:path";
-import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "./print-html";
+// renderPrintPdf now takes the real physical page size directly (in
+// inches) rather than a TrimSize -- see PrintDocument in print-html.ts and
+// the BLEED_IN comment there for why the two aren't always the same
+// anymore (a book with a full-spread image prints at trim size + real
+// print bleed, not exactly its nominal trim size).
 
 // pagedjs's package.json restricts imports to its declared `exports` map,
 // which does not include anything under dist/ -- so a direct
@@ -121,8 +125,12 @@ function getChromiumExecutablePath(): Promise<string> {
   return chromiumExecutablePathPromise;
 }
 
-/** Renders a full print-ready HTML document (from buildPrintHtml) to a PDF buffer. */
-export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<Buffer> {
+/** Renders a full print-ready HTML document (from buildPrintHtml) to a PDF
+ * buffer -- pageWidthIn/pageHeightIn must be the SAME dimensions
+ * buildPrintHtml resolved the document's @page CSS to (its PrintDocument
+ * return value), not just the book's nominal trim size -- see the
+ * BLEED_IN comment in print-html.ts. */
+export async function renderPrintPdf(html: string, pageWidthIn: number, pageHeightIn: number): Promise<Buffer> {
   const executablePath = await getChromiumExecutablePath();
 
   const browser = await puppeteer.launch({
@@ -238,14 +246,14 @@ export async function renderPrintPdf(html: string, trimSize: TrimSize): Promise<
     // trim size). Rather than depend on that CSS-detection path at all
     // (which we now know is unreliable under the exact media mode Paged.js
     // needs), tell Chromium the real physical page size directly -- we
-    // already know it exactly, since it's the same TRIM_SIZE_DIMENSIONS
-    // value buildPrintHtml() baked into the @page rule in the first place.
-    const { width, height } = TRIM_SIZE_DIMENSIONS[trimSize];
-
+    // already know it exactly -- it's the same PrintDocument.pageWidthIn/
+    // pageHeightIn value buildPrintHtml() baked into the @page rule in the
+    // first place (see the BLEED_IN comment in print-html.ts for why that
+    // is not always simply the nominal trim size).
     const pdf = await page.pdf({
       printBackground: true,
-      width,
-      height,
+      width: `${pageWidthIn}in`,
+      height: `${pageHeightIn}in`,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
 

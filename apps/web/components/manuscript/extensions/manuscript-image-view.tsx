@@ -3,16 +3,20 @@
 // The interactive editor-side view for a "manuscriptImage" node (see
 // ./manuscript-image.ts) -- the image itself, plus, only while the node is
 // selected, a small floating control bar to switch its display mode
-// (header/spread/caption) and, in caption mode, edit the caption text.
+// (header/spread/caption), and (for header/caption images only -- a spread
+// always fills the whole page, so alignment/sizing don't apply to it, see
+// the render note in tiptap-to-xhtml.ts) its horizontal alignment and a
+// size preset. In caption mode there's also a caption text field.
 // Everything here is purely an editing affordance; none of it is what
 // export sees (that's tiptap-to-xhtml.ts's "manuscriptImage" case).
 
 import type { NodeViewProps } from "@tiptap/react";
 import { NodeViewWrapper } from "@tiptap/react";
-import { Rows, GalleryVertical, Newspaper, Trash2 } from "lucide-react";
+import { Rows, GalleryVertical, Newspaper, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { ManuscriptImageDisplayMode } from "./manuscript-image";
+import type { ManuscriptImageAlign, ManuscriptImageDisplayMode } from "./manuscript-image";
+import { MANUSCRIPT_IMAGE_WIDTH_PRESETS } from "./manuscript-image";
 
 const MODE_OPTIONS: { mode: ManuscriptImageDisplayMode; label: string; icon: typeof Rows }[] = [
   { mode: "header", label: "Header", icon: Rows },
@@ -20,20 +24,31 @@ const MODE_OPTIONS: { mode: ManuscriptImageDisplayMode; label: string; icon: typ
   { mode: "caption", label: "Photo + caption", icon: Newspaper },
 ];
 
+const ALIGN_OPTIONS: { align: ManuscriptImageAlign; label: string; icon: typeof AlignLeft }[] = [
+  { align: "left", label: "Align left", icon: AlignLeft },
+  { align: "center", label: "Align center", icon: AlignCenter },
+  { align: "right", label: "Align right", icon: AlignRight },
+];
+
 export function ManuscriptImageView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
   const displayMode: ManuscriptImageDisplayMode =
     node.attrs.displayMode === "header" || node.attrs.displayMode === "spread" ? node.attrs.displayMode : "caption";
   const caption: string = typeof node.attrs.caption === "string" ? node.attrs.caption : "";
+  const align: ManuscriptImageAlign =
+    node.attrs.align === "left" || node.attrs.align === "right" ? node.attrs.align : "center";
+  const widthPercent: number | null = typeof node.attrs.widthPercent === "number" ? node.attrs.widthPercent : null;
+  const showSizingControls = displayMode !== "spread";
 
   return (
     <NodeViewWrapper
       className={cn(
         "manuscript-image-node",
         `manuscript-image-node--${displayMode}`,
+        `manuscript-image-node--align-${align}`,
         selected && "manuscript-image-node--selected"
       )}
     >
-      <div className="relative">
+      <div className="relative" style={showSizingControls && widthPercent ? { width: `${widthPercent}%`, marginLeft: align === "right" ? "auto" : undefined, marginRight: align === "left" ? "auto" : undefined, marginInline: align === "center" ? "auto" : undefined } : undefined}>
         {/* eslint-disable-next-line @next/next/no-img-element -- a Supabase Storage URL, not a local/optimizable asset */}
         <img src={node.attrs.src} alt={node.attrs.alt || ""} className="manuscript-image-node__img" />
 
@@ -55,6 +70,42 @@ export function ManuscriptImageView({ node, updateAttributes, deleteNode, select
                 <Icon className="size-3.5" />
               </button>
             ))}
+
+            {showSizingControls && (
+              <>
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-border" />
+                {ALIGN_OPTIONS.map(({ align: a, label, icon: Icon }) => (
+                  <button
+                    key={a}
+                    type="button"
+                    title={label}
+                    aria-label={label}
+                    onClick={() => updateAttributes({ align: a })}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground",
+                      align === a &&
+                        "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                  </button>
+                ))}
+                <span className="mx-0.5 h-5 w-px shrink-0 bg-border" />
+                <select
+                  aria-label="Image size"
+                  value={widthPercent ?? ""}
+                  onChange={(e) => updateAttributes({ widthPercent: e.target.value ? Number(e.target.value) : null })}
+                  className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+                >
+                  {MANUSCRIPT_IMAGE_WIDTH_PRESETS.map((preset) => (
+                    <option key={preset.label} value={preset.value ?? ""}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <span className="mx-0.5 h-5 w-px shrink-0 bg-border" />
             <button
               type="button"

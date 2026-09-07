@@ -149,24 +149,50 @@ function renderBlock(node: DocNode, ctx?: RenderContext): string {
       // one of three display modes the writer picks per image: "header"
       // (a modest centered image, styled to sit under a chapter title),
       // "spread" (a full dedicated page, print-html.ts forces a break
-      // before/after it), or "caption" (an inline photo with an optional
-      // caption line -- the default). ctx.resolveImage turns the node's
-      // stored Supabase Storage URL into whatever each export pipeline
-      // actually needs to embed (see RenderContext above); a miss (no ctx,
-      // or that URL's bytes couldn't be fetched at export time) fails soft
-      // by dropping the ENTIRE figure -- image and caption both -- rather
-      // than shipping a broken image reference or (worse) a caption
-      // floating with no photo above it, which would look like a bug to
-      // a reader rather than a missing-image edge case.
+      // before/after it and (2026-09-07) makes it bleed all the way to the
+      // physical page edge -- see the bleed note in print-html.ts), or
+      // "caption" (an inline photo with an optional caption line -- the
+      // default). ctx.resolveImage turns the node's stored Supabase
+      // Storage URL into whatever each export pipeline actually needs to
+      // embed (see RenderContext above); a miss (no ctx, or that URL's
+      // bytes couldn't be fetched at export time) fails soft by dropping
+      // the ENTIRE figure -- image and caption both -- rather than
+      // shipping a broken image reference or (worse) a caption floating
+      // with no photo above it, which would look like a bug to a reader
+      // rather than a missing-image edge case.
+      //
+      // "align" and "widthPercent" (2026-09-07) are only meaningful for
+      // "header"/"caption" images -- a "spread" image always fills the
+      // whole page, so both are deliberately ignored for it (the editor's
+      // own controls already hide these options for a spread image, see
+      // manuscript-image-view.tsx, but export renders straight off node
+      // attrs, so this guards the same rule server-side rather than
+      // trusting the client never sent them). Rendered as inline styles
+      // (figure gets text-align, since a plain <img> is inline-level and
+      // aligns within its block parent the same way a line of text would;
+      // the image itself gets an explicit width) rather than new CSS
+      // classes -- keeps this file the single place that decides an
+      // image's actual on-page position/size, with print-html.ts/
+      // build-epub.ts only supplying the *default* look via their existing
+      // ".manuscript-image-figure--<mode>" class rules, which an inline
+      // style here naturally overrides.
       const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
       const mode = node.attrs?.displayMode === "header" || node.attrs?.displayMode === "spread" ? node.attrs.displayMode : "caption";
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
       const captionText = typeof node.attrs?.caption === "string" ? node.attrs.caption.trim() : "";
       const resolvedSrc = src && ctx?.resolveImage ? ctx.resolveImage(src) : null;
       if (!resolvedSrc) return "";
-      const imgHtml = `<img class="manuscript-image" src="${escapeXml(resolvedSrc)}" alt="${escapeXml(alt)}"/>`;
+
+      const align = node.attrs?.align === "left" || node.attrs?.align === "right" ? node.attrs.align : "center";
+      const widthPercentRaw = Number(node.attrs?.widthPercent);
+      const widthPercent = mode !== "spread" && Number.isFinite(widthPercentRaw) && widthPercentRaw > 0 && widthPercentRaw <= 100 ? widthPercentRaw : null;
+
+      const figureStyle = mode !== "spread" && align !== "center" ? ` style="text-align: ${align};"` : "";
+      const imgStyle = widthPercent ? ` style="width: ${widthPercent}%; max-width: ${widthPercent}%;"` : "";
+
+      const imgHtml = `<img class="manuscript-image" src="${escapeXml(resolvedSrc)}" alt="${escapeXml(alt)}"${imgStyle}/>`;
       const captionHtml = mode === "caption" && captionText ? `<figcaption>${escapeXml(captionText)}</figcaption>` : "";
-      return `<figure class="manuscript-image-figure manuscript-image-figure--${mode}">${imgHtml}${captionHtml}</figure>`;
+      return `<figure class="manuscript-image-figure manuscript-image-figure--${mode}"${figureStyle}>${imgHtml}${captionHtml}</figure>`;
     }
     default:
       // Unknown block type -- render its children as paragraphs rather
@@ -201,6 +227,22 @@ export function collectImageUrls(doc: unknown): string[] {
   };
   root.content.forEach(walk);
   return urls;
+}
+
+/** True if a scene's Tiptap document contains at least one "spread"-mode
+ * manuscriptImage node -- used by print-html.ts to decide whether the
+ * whole print document needs real bleed (extra physical page size, plus
+ * an escape-to-the-edge rule for that image) at all. A book with no
+ * spread images renders at exactly its trim size, unchanged from before
+ * this existed. */
+export function docHasSpreadImage(doc: unknown): boolean {
+  const root = doc as DocNode | null | undefined;
+  if (!root || !Array.isArray(root.content)) return false;
+  const walk = (node: DocNode): boolean => {
+    if (node.type === "manuscriptImage" && node.attrs?.displayMode === "spread") return true;
+    return (node.content ?? []).some(walk);
+  };
+  return root.content.some(walk);
 }
 
 /** True if a scene's document has no real text in it (a blank/new scene). */

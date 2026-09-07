@@ -1,6 +1,11 @@
 export { buildEpub } from "./build-epub";
 export type { EpubBookInput, EpubSection, EpubPart, EpubChapter, EpubScene, EpubCoverImage } from "./build-epub";
-export { sceneContentToXhtml, isSceneContentEmpty, collectImageUrls } from "./tiptap-to-xhtml";
+export { sceneContentToXhtml, isSceneContentEmpty, collectImageUrls, docHasSpreadImage } from "./tiptap-to-xhtml";
+export type { DocNode, RenderContext } from "./tiptap-to-xhtml";
 export { buildPrintHtml, TRIM_SIZE_DIMENSIONS } from "./print-html";
-export type { TrimSize, PrintBookInput, PrintOptions } from "./print-html";
+export type { TrimSize, PrintBookInput, PrintOptions, PrintDocument } from "./print-html";
 export { renderPrintPdf } from "./render-pdf";
+export { buildManuscriptDocx } from "./build-docx";
+export type { DocxBookInput } from "./build-docx";
+export { parseManuscriptDocx } from "./docx-import";
+export type { ParsedChapter } from "./docx-import";

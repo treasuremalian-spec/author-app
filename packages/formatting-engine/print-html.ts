@@ -30,8 +30,13 @@
 // forced to start on a right-hand page. All are optional with defaults
 // matching the previous hardcoded behavior, so existing exports (no
 // options passed) are unchanged.
+//
+// Real print bleed for full-spread images (added 2026-09-07, per author
+// request) -- see the long comment right above BLEED_IN below for the
+// mechanics and how this was verified against a real Paged.js render
+// before shipping.
 
-import { sceneContentToXhtml, isSceneContentEmpty, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
+import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection } from "./build-epub";
 import {
   CRIMSON_PRO_REGULAR,
@@ -40,12 +45,75 @@ import {
   CRIMSON_PRO_BOLD_ITALIC,
 } from "./fonts-embedded";
 
-export type TrimSize = "5x8" | "6x9";
+// TrimSize/TRIM_SIZE_DIMENSIONS now live in trim-sizes.ts (re-exported
+// here for every existing consumer of print-html.ts) -- split out so a
+// CLIENT component (the Format tab's live preview) can import just those
+// constants without pulling this file's own server-only imports (which
+// flow into puppeteer-core) into a browser bundle. See trim-sizes.ts's
+// file comment for the real local `next build` failure that motivated
+// this.
+export { TRIM_SIZE_DIMENSIONS, type TrimSize } from "./trim-sizes";
+import type { TrimSize } from "./trim-sizes";
 
-export const TRIM_SIZE_DIMENSIONS: Record<TrimSize, { width: string; height: string; label: string }> = {
-  "5x8": { width: "5in", height: "8in", label: '5" x 8" (mass market / digest)' },
-  "6x9": { width: "6in", height: "9in", label: '6" x 9" (trade paperback)' },
+// Same trim dimensions as TRIM_SIZE_DIMENSIONS above, but as plain numbers
+// (inches) rather than CSS length strings -- needed so bleed math below can
+// just add/subtract, rather than parsing a "6in" string back into a number.
+const TRIM_SIZE_INCHES: Record<TrimSize, { width: number; height: number }> = {
+  "5x8": { width: 5, height: 8 },
+  "6x9": { width: 6, height: 9 },
 };
+
+// How far a full-spread image bleeds past the book's actual trim line --
+// 0.125in (1/8in) is the industry-standard bleed allowance most print-on-
+// demand services (KDP, IngramSpark) ask for, and what a real Vellum-
+// exported reference book with bleed images measures at.
+//
+// Real print bleed means the DELIVERED PDF page is physically LARGER than
+// the book's trim size, with bleed-area artwork meant to be sliced off
+// when the book block gets trimmed to its final size -- not just "the
+// image touches the edge of whatever page we hand back," which is what
+// the pre-2026-09-07 version of this file did (see the removed comment on
+// .manuscript-image-figure--spread below; confirmed by inspecting a real
+// export that the image stopped at the normal content margin, nowhere
+// close to any page edge). So when this book has at least one "spread"
+// image, EVERY page in the document (not just the ones with a spread
+// image on them) gets rendered BLEED_IN larger on all four sides than its
+// nominal trim size -- real print books use one uniform physical page
+// size throughout, with normal (non-bleeding) pages simply carrying extra
+// blank margin out to that same physical edge. A book with no spread
+// images is entirely unaffected -- pages render at exactly the requested
+// trim size, exactly as before this existed.
+//
+// The actual "make the image touch the true page edge" mechanism is a
+// negative-margin escape on the .manuscript-image-figure--spread box,
+// targeted per page side (Paged.js tags each generated page with either
+// "pagedjs_left_page" or "pagedjs_right_page" -- confirmed by direct
+// inspection of a real paginated DOM, since this isn't formally documented
+// pagedjs API) since a mirrored-margins book has a different margin (and
+// therefore a different escape distance) on its left vs. right pages. This
+// whole approach (page-size math, margin math, and the negative-margin
+// escape rule) was verified 2026-09-07 against a real local Paged.js +
+// headless-Chromium render -- not just reasoned about -- by rendering a
+// real spread image at a real trim size and pixel-sampling the resulting
+// PDF's four corners and edge midpoints to confirm the image's fill color
+// reaches every one of them, exactly matching the same "real rendered
+// pixels, not text-run metadata" verification standard already used
+// elsewhere in this pipeline (see the drop-cap vertical-alignment comment
+// in this same file for prior art on why that distinction matters here).
+const BLEED_IN = 0.125;
+
+/** The book's actual PDF page dimensions in inches, given its trim size and
+ * whether it needs bleed (see BLEED_IN above) -- shared by buildCss (which
+ * needs it for the @page rule) and buildPrintHtml's return value (which
+ * renderPrintPdf/render-pdf.ts needs to tell Chromium's page.pdf() the
+ * real physical page size to print, now that it's not always simply the
+ * nominal trim size -- see the "5x8/6x9 came out as Letter" history in
+ * this file's own comments for why that value has to be exact). */
+function resolvePageDimensions(trimSize: TrimSize, bleedActive: boolean): { widthIn: number; heightIn: number } {
+  const { width, height } = TRIM_SIZE_INCHES[trimSize];
+  const bleed = bleedActive ? BLEED_IN : 0;
+  return { widthIn: width + 2 * bleed, heightIn: height + 2 * bleed };
+}
 
 export interface PrintBookInput extends EpubBookInput {
   trimSize: TrimSize;
@@ -215,22 +283,77 @@ ${chaptersHtml}`;
   return { html, nextChapterNumber: chapterNumber };
 }
 
-function buildCss(trimSize: TrimSize, options: Required<PrintOptions>): string {
-  const { width, height } = TRIM_SIZE_DIMENSIONS[trimSize];
+/** True if any scene anywhere in the book contains a "spread"-mode
+ * manuscriptImage node -- see BLEED_IN above for what this triggers. */
+function bookHasSpreadImage(sections: EpubSection[]): boolean {
+  for (const section of sections) {
+    const chapters = section.kind === "part" ? section.part.chapters : [section.chapter];
+    for (const chapter of chapters) {
+      for (const scene of chapter.scenes) {
+        if (docHasSpreadImage(scene.content)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function buildCss(trimSize: TrimSize, options: Required<PrintOptions>, bleedActive: boolean): string {
+  const { widthIn, heightIn } = resolvePageDimensions(trimSize, bleedActive);
+  const width = `${widthIn}in`;
+  const height = `${heightIn}in`;
   const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight } = options;
+  const bleed = bleedActive ? BLEED_IN : 0;
 
   // Base margins (top/right/bottom/left), used as-is when mirroredMargins
   // is off. When it's on, left/right are instead driven by the :left/
   // :right page-side rules below, with a slightly bigger inside (spine)
   // margin than outside -- matching real print-book convention (and
   // roughly what a real Vellum-exported reference book measured at:
-  // ~0.875in inside / ~0.62in outside, confirmed 2026-09-06).
-  const marginTop = "0.8in";
-  const marginBottom = "0.9in";
-  const marginOutside = "0.6in";
-  const marginInside = "0.85in";
-  const baseMargin = mirroredMargins ? "" : `margin: ${marginTop} 0.65in ${marginBottom} 0.65in;`;
+  // ~0.875in inside / ~0.62in outside, confirmed 2026-09-06). Each gets
+  // BLEED_IN added on top when this book has a spread image (see BLEED_IN
+  // above) -- the physical page grew by the same amount on every side, so
+  // normal (non-bleeding) content needs that same extra margin to land in
+  // exactly the same place *relative to the trim line* as it would on a
+  // non-bled page; only the spread-image escape rule further down is
+  // meant to actually reach the new, larger physical edge.
+  const marginTopIn = 0.8 + bleed;
+  const marginBottomIn = 0.9 + bleed;
+  const marginOutsideIn = 0.6 + bleed;
+  const marginInsideIn = 0.85 + bleed;
+  const flatMarginIn = 0.65 + bleed;
+  const marginTop = `${marginTopIn}in`;
+  const marginBottom = `${marginBottomIn}in`;
+  const marginOutside = `${marginOutsideIn}in`;
+  const marginInside = `${marginInsideIn}in`;
+  const baseMargin = mirroredMargins ? "" : `margin: ${marginTop} ${flatMarginIn}in ${marginBottom} ${flatMarginIn}in;`;
   const chapterBreak = chapterStartsOnRight ? "recto" : "page";
+
+  // The full-spread-image bleed escape (see BLEED_IN above) -- a negative
+  // margin equal to this page side's own margin box, sized back up with
+  // calc() to fill the entire physical page (page size minus a negative
+  // margin box always equals the full page, regardless of what the margin
+  // box itself was). Written per Paged.js page-side class rather than a
+  // single generic rule because a mirrored-margins book has a DIFFERENT
+  // margin box on its left vs. right pages -- and even for a non-mirrored
+  // book (where both sides use the same flat margin), Paged.js still tags
+  // every page with one of these two classes, so writing both
+  // unconditionally with the same numbers on each side is simplest and
+  // correct either way, rather than branching this block on
+  // mirroredMargins too.
+  const rightOutside = mirroredMargins ? marginOutsideIn : flatMarginIn;
+  const rightInside = mirroredMargins ? marginInsideIn : flatMarginIn;
+  const spreadBleedCss = `
+.pagedjs_right_page .manuscript-image-figure--spread {
+  margin: -${marginTopIn}in -${rightOutside}in -${marginBottomIn}in -${rightInside}in;
+  width: calc(100% + ${rightOutside + rightInside}in);
+  height: calc(100% + ${marginTopIn + marginBottomIn}in);
+}
+.pagedjs_left_page .manuscript-image-figure--spread {
+  margin: -${marginTopIn}in -${rightInside}in -${marginBottomIn}in -${rightOutside}in;
+  width: calc(100% + ${rightOutside + rightInside}in);
+  height: calc(100% + ${marginTopIn + marginBottomIn}in);
+}
+`;
 
   return `
 /* Embedded print font (Crimson Pro, SIL Open Font License) -- see
@@ -403,18 +526,25 @@ p {
                   No forced break; it sits wherever the writer placed it.
      "spread"  -- a full dedicated page. break-before/after: page is the
                   same mechanism .titlepage/.part-divider already use
-                  above. Fills the existing page's content area (inside
-                  the normal margins) rather than true edge-to-edge print
-                  bleed -- real bleed needs trim/bleed-box handling at the
-                  PDF-generation level, out of scope for this pass; noted
-                  here so a future pass knows this is a deliberate v1
-                  limit, not an oversight.
+                  above. Bleeds all the way to the true physical page edge
+                  (past the trim line, into real print bleed, when this
+                  book has any spread image -- see BLEED_IN and
+                  spreadBleedCss above for the mechanics and how this was
+                  verified against a real render before shipping).
      "caption" -- the default: an inline photo, modestly sized, with an
                   optional <figcaption> underneath in small italic type
                   (classic photo-insert style).
+   "align"/an explicit width (writer-controlled per image, see
+   manuscript-image-view.tsx) are applied as inline styles directly on the
+   <figure>/<img> by tiptap-to-xhtml.ts, which naturally override the
+   class-based defaults below -- these rules are just each mode's default
+   look when the writer hasn't overridden it.
    object-fit: contain (not cover) on every mode so an odd aspect ratio
    never crops part of the writer's photo away without them asking for
-   that. */
+   that (the one exception is the spread bleed rule above, which
+   deliberately uses cover-style stretching to fill the bled page edge to
+   edge -- see the "manuscript-image" rule inside .manuscript-image-figure
+   --spread below). */
 .manuscript-image-figure {
   margin: 1em 0;
   text-align: center;
@@ -435,11 +565,16 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .manuscript-image-figure--spread .manuscript-image {
+  width: 100%;
+  height: 100%;
   max-width: 100%;
   max-height: 100%;
+  object-fit: cover;
 }
+${spreadBleedCss}
 .manuscript-image-figure--caption .manuscript-image {
   max-width: 62%;
 }
@@ -559,8 +694,17 @@ ${
 `;
 }
 
+export interface PrintDocument {
+  html: string;
+  /** The real physical PDF page size renderPrintPdf/render-pdf.ts must
+   * pass to Chromium's page.pdf() -- not always exactly the requested
+   * trim size, see BLEED_IN above. */
+  pageWidthIn: number;
+  pageHeightIn: number;
+}
+
 /** Builds the full print-ready HTML document Paged.js will paginate. */
-export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {}): string {
+export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {}): PrintDocument {
   // Merge field-by-field with ?? rather than a blanket object spread --
   // callers (like the PDF export route, parsing optional query params)
   // may pass a key explicitly set to `undefined` rather than omitting it,
@@ -573,6 +717,8 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     dropCaps: options.dropCaps ?? DEFAULT_PRINT_OPTIONS.dropCaps,
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
   };
+
+  const bleedActive = bookHasSpreadImage(book.sections);
 
   // Images are embedded as data: URIs -- a single in-memory HTML string
   // (which is all Paged.js/Puppeteer render from, see render-pdf.ts) has
@@ -603,12 +749,12 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     })
     .join("\n");
 
-  return `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="${book.language || "en"}">
 <head>
 <meta charset="utf-8"/>
 <title>${escapeXml(book.title)}</title>
-<style>${buildCss(book.trimSize, resolved)}</style>
+<style>${buildCss(book.trimSize, resolved, bleedActive)}</style>
 </head>
 <body>
 <section class="titlepage">
@@ -618,4 +764,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
 ${sectionsHtml}
 </body>
 </html>`;
+
+  const { widthIn, heightIn } = resolvePageDimensions(book.trimSize, bleedActive);
+  return { html, pageWidthIn: widthIn, pageHeightIn: heightIn };
 }

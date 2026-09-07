@@ -17,7 +17,7 @@ function parseTrimSize(value: string | null): TrimSize {
   return value === "5x8" ? "5x8" : "6x9";
 }
 
-// Print options (Phase 15) come from query params set by ExportCard.tsx's
+// Print options (Phase 15) come from query params set by FormatWorkspace.tsx's
 // checkboxes/select -- each is optional and falls back to buildPrintHtml's
 // own defaults (matching the pre-Phase-15 hardcoded behavior) when absent
 // or unparseable, so an old/cached export link without these params still
@@ -54,8 +54,8 @@ export async function GET(
 
   try {
     const book = await loadBookForExport(projectId);
-    const html = buildPrintHtml({ ...book, trimSize }, printOptions);
-    const pdf = await renderPrintPdf(html, trimSize);
+    const { html, pageWidthIn, pageHeightIn } = buildPrintHtml({ ...book, trimSize }, printOptions);
+    const pdf = await renderPrintPdf(html, pageWidthIn, pageHeightIn);
 
     const safeFilename = safeBookFilename(book.title);
     const trimSuffix = trimSize.replace("x", "-");
