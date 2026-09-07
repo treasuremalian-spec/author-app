@@ -46,6 +46,14 @@ type AuthorProfileRow = {
   presenceUpdatedAt: Date | null;
 };
 
+type SprintMessageRow = {
+  id: string;
+  sprintId: string;
+  userId: string;
+  text: string;
+  createdAt: Date;
+};
+
 export interface SprintParticipantView {
   userId: string;
   displayName: string;
@@ -85,6 +93,16 @@ export interface SprintListItem {
   participantCount: number;
   isParticipant: boolean;
   createdAt: string;
+}
+
+export interface SprintMessageView {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  text: string;
+  createdAt: string;
+  isMe: boolean;
 }
 
 async function getUserTotalWordCount(userId: string): Promise<number> {
@@ -409,4 +427,62 @@ async function buildSprintListItems(sprints: SprintRow[], userId: string): Promi
     isParticipant: myParticipantSprintIds.has(s.id),
     createdAt: s.createdAt.toISOString(),
   }));
+}
+
+// Only a sprint's own participants can read or post in its chat -- same
+// join-check createSprint()/joinSprint() already do, just reused here
+// rather than duplicated. Throws (not a silent empty result) so the UI
+// can tell "empty chat" apart from "you're not allowed to see this."
+async function assertParticipant(sprintId: string, userId: string): Promise<void> {
+  const participant = await prisma.sprintParticipant.findUnique({
+    where: { sprintId_userId: { sprintId, userId } },
+  });
+  if (!participant) {
+    throw new Error("You can only chat in sprints you've joined.");
+  }
+}
+
+export async function listSprintMessages(sprintId: string): Promise<SprintMessageView[]> {
+  const user = await requireUser();
+  await assertParticipant(sprintId, user.id);
+
+  const messages = (await prisma.sprintMessage.findMany({
+    where: { sprintId },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+  })) as SprintMessageRow[];
+  if (messages.length === 0) return [];
+
+  const profiles = (await prisma.authorProfile.findMany({
+    where: { userId: { in: Array.from(new Set(messages.map((m) => m.userId))) } },
+  })) as AuthorProfileRow[];
+  const profileByUserId = new Map(profiles.map((p) => [p.userId, p]));
+
+  return messages.map((m) => {
+    const profile = profileByUserId.get(m.userId);
+    return {
+      id: m.id,
+      userId: m.userId,
+      displayName: profile?.displayName ?? "A writer",
+      avatarUrl: profile?.avatarUrl ?? null,
+      text: m.text,
+      createdAt: m.createdAt.toISOString(),
+      isMe: m.userId === user.id,
+    };
+  });
+}
+
+export async function sendSprintMessage(sprintId: string, text: string): Promise<void> {
+  const user = await requireUser();
+  await assertParticipant(sprintId, user.id);
+
+  // Trim to something a chat bubble can actually hold -- this is a quick
+  // sprint-room chat, not a document, so no need for anything longer.
+  const trimmed = text.trim().slice(0, 1000);
+  if (!trimmed) return;
+
+  await prisma.sprintMessage.create({
+    data: { sprintId, userId: user.id, text: trimmed },
+  });
+  revalidatePath(`/sprints/${sprintId}`);
 }

@@ -36,6 +36,7 @@ model User {
 
   sprintsCreated      Sprint[]           @relation("SprintCreator")
   sprintParticipation SprintParticipant[]
+  sprintMessages      SprintMessage[]
 
   circleMemberships CircleMember[]
   writingGoals      WritingGoal[]
@@ -589,6 +590,7 @@ model Sprint {
   endedAt        DateTime?
 
   participants SprintParticipant[]
+  messages     SprintMessage[]
 
   createdAt DateTime @default(now())
 
@@ -611,6 +613,28 @@ model SprintParticipant {
 
   @@unique([sprintId, userId])
   @@map("sprint_participants")
+}
+
+// A sprint's own scoped chat -- visible only to that sprint's
+// participants (enforced in lib/actions/sprints.ts, same
+// checked-in-app-code + trusted-by-callers pattern the rest of this
+// project's non-manuscript social data uses). Plain text only, same as
+// every other message-shaped table in this schema (Notification.payload
+// aside, which is structured data, not free text) -- no attachments, no
+// manuscript content possible here by construction, same spirit as
+// SprintParticipant only ever storing word counts.
+model SprintMessage {
+  id       String @id @default(cuid())
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([sprintId, createdAt])
+  @@map("sprint_messages")
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trophy, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Trophy, Loader2, PenLine } from "lucide-react";
 
 import {
   getSprintDetail,
@@ -13,6 +14,7 @@ import {
   type SprintDetail,
 } from "@/lib/actions/sprints";
 import { PresenceDot } from "@/components/presence/PresenceDot";
+import { SprintChat } from "@/components/sprints/SprintChat";
 import { Button } from "@/components/ui/button";
 
 function initials(name: string): string {
@@ -143,6 +145,18 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
             {sprint.wordGoal && (
               <p className="mt-1 text-sm text-muted-foreground">Goal: {sprint.wordGoal.toLocaleString()} words</p>
             )}
+            {/* This room only ever shows word COUNTS, by design (see
+                schema.prisma's privacy note on SprintParticipant) -- so
+                writing itself happens back in the real manuscript editor,
+                not here. This just gets you there in one click; your word
+                count keeps updating live in this room as you save,
+                same as it already does today. */}
+            <Button asChild className="mt-4">
+              <Link href="/library">
+                <PenLine className="size-4" />
+                Go write
+              </Link>
+            </Button>
           </>
         )}
 
@@ -186,6 +200,10 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
           ))}
         </ul>
       </div>
+
+      {sprint.isParticipant && (sprint.status === "SCHEDULED" || sprint.status === "ACTIVE") && (
+        <SprintChat sprintId={sprintId} />
+      )}
     </div>
   );
 }
