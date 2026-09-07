@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@author-app/database";
 import { EMPTY_DOC } from "@/lib/wordcount";
-import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
+import { requireUser, assertProjectOwnership, assertNodeInProject, assertSceneInProject } from "@/lib/actions/shared";
 
 function defaultTitle(type: "PART" | "CHAPTER" | "SCENE") {
   if (type === "PART") return "New Part";
@@ -118,6 +118,7 @@ export async function createNode(input: {
 export async function renameNode(nodeId: string, projectId: string, title: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+  await assertNodeInProject(nodeId, projectId);
 
   const trimmed = title.trim();
   if (!trimmed) throw new Error("Title can't be empty.");
@@ -133,6 +134,7 @@ export async function renameNode(nodeId: string, projectId: string, title: strin
 export async function deleteNode(nodeId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+  await assertNodeInProject(nodeId, projectId);
 
   // Cascade deletes children + any scene beneath them (defined at the DB level).
   await prisma.manuscriptNode.delete({ where: { id: nodeId } });
@@ -146,6 +148,24 @@ export async function reorderNodes(
 ) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+
+  // assertProjectOwnership only proves the CALLER owns `projectId` -- it
+  // says nothing about whether every node in this batch (or the parent
+  // it's being moved under) actually belongs to that project. Without
+  // this, a signed-in user could reorder/reparent an arbitrary OTHER
+  // user's manuscript nodes just by including their id in a batch sent
+  // alongside a projectId the caller genuinely owns.
+  const touchedIds = new Set<string>();
+  for (const u of updates) {
+    touchedIds.add(u.id);
+    if (u.parentId) touchedIds.add(u.parentId);
+  }
+  const ownedCount = await prisma.manuscriptNode.count({
+    where: { id: { in: Array.from(touchedIds) }, projectId },
+  });
+  if (ownedCount !== touchedIds.size) {
+    throw new Error("One or more of those items aren't part of this project.");
+  }
 
   await prisma.$transaction(
     updates.map((u) =>
@@ -183,6 +203,7 @@ export async function updateSceneMeta(
 ) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+  await assertSceneInProject(sceneId, projectId);
 
   await prisma.scene.update({
     where: { id: sceneId },
@@ -195,6 +216,7 @@ export async function updateSceneMeta(
 export async function listSceneVersions(sceneId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+  await assertSceneInProject(sceneId, projectId);
 
   return prisma.sceneVersion.findMany({
     where: { sceneId },
@@ -210,6 +232,7 @@ export async function restoreSceneVersion(
 ) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+  await assertSceneInProject(sceneId, projectId);
 
   const version = await prisma.sceneVersion.findUnique({ where: { id: versionId } });
   if (!version || version.sceneId !== sceneId) throw new Error("Version not found.");

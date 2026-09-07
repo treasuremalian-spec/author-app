@@ -77,11 +77,15 @@ export async function GET(
     // keep it rather than removing it once things are working, since a
     // future Vercel-only failure here would otherwise be just as invisible.
     console.error("PDF export failed for project", projectId, error);
+    // The full stack used to be included in this JSON response too, as
+    // temporary instrumentation for a pipeline that can't be smoke-tested
+    // locally (see project memory) -- but that means anyone who can call
+    // this route (i.e. the project's own owner, per loadBookForExport's
+    // auth check) gets a server stack trace back, which can leak internal
+    // file paths/structure for no real benefit once a bug is fixed.
+    // console.error above still captures the full error for us to debug;
+    // the client only ever needs the message.
     const message = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-    return NextResponse.json(
-      { error: "PDF export failed", message, stack },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "PDF export failed", message }, { status: 500 });
   }
 }

@@ -61,7 +61,12 @@ export async function updateCharacter(
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.character.update({ where: { id: characterId }, data });
+  // The compound where (id + projectId) is what stops a caller from
+  // passing someone ELSE's characterId alongside a project they genuinely
+  // own -- assertProjectOwnership alone only proves the latter (see the
+  // note in shared.ts above assertNodeInProject/assertSceneInProject).
+  const result = await prisma.character.updateMany({ where: { id: characterId, projectId }, data });
+  if (result.count === 0) throw new Error("That character isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 
@@ -69,7 +74,8 @@ export async function deleteCharacter(characterId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.character.delete({ where: { id: characterId } });
+  const result = await prisma.character.deleteMany({ where: { id: characterId, projectId } });
+  if (result.count === 0) throw new Error("That character isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 
@@ -151,13 +157,14 @@ export async function updateLocation(
   const { worldbuilding, ...rest } = data;
   const customFields = worldbuilding ? normalizeWorldbuilding(worldbuilding) : undefined;
 
-  await prisma.location.update({
-    where: { id: locationId },
+  const result = await prisma.location.updateMany({
+    where: { id: locationId, projectId },
     data: {
       ...rest,
       ...(customFields ? { customFields } : {}),
     },
   });
+  if (result.count === 0) throw new Error("That location isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 
@@ -165,7 +172,8 @@ export async function deleteLocation(locationId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.location.delete({ where: { id: locationId } });
+  const result = await prisma.location.deleteMany({ where: { id: locationId, projectId } });
+  if (result.count === 0) throw new Error("That location isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 
@@ -244,7 +252,8 @@ export async function updateStoryBibleEntry(
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.storyBibleEntry.update({ where: { id: entryId }, data });
+  const result = await prisma.storyBibleEntry.updateMany({ where: { id: entryId, projectId }, data });
+  if (result.count === 0) throw new Error("That note isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }
 
@@ -252,6 +261,7 @@ export async function deleteStoryBibleEntry(entryId: string, projectId: string) 
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.storyBibleEntry.delete({ where: { id: entryId } });
+  const result = await prisma.storyBibleEntry.deleteMany({ where: { id: entryId, projectId } });
+  if (result.count === 0) throw new Error("That note isn't part of this project.");
   revalidatePath(`/projects/${projectId}/story-bible`);
 }

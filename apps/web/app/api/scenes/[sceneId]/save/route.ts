@@ -5,7 +5,7 @@
 // something a background fetch() call can usefully act on).
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { assertProjectOwnership } from "@/lib/actions/shared";
+import { assertProjectOwnership, assertSceneInProject } from "@/lib/actions/shared";
 import { persistSceneContent } from "@/lib/scene-save";
 
 export const runtime = "nodejs";
@@ -37,6 +37,14 @@ export async function POST(
     }
 
     await assertProjectOwnership(projectId, user.id);
+    // assertProjectOwnership only proves this user owns `projectId` -- on
+    // its own that's not enough: `sceneId` comes from the URL and every
+    // signed-in user owns at least one project, so without this check
+    // anyone could autosave over a DIFFERENT user's scene just by pairing
+    // a project they genuinely own with someone else's sceneId. Found and
+    // fixed 2026-09-07 as part of a privacy/security pass -- see
+    // shared.ts's assertSceneInProject and engineering_notes.md.
+    await assertSceneInProject(sceneId, projectId);
 
     const { wordCount } = await persistSceneContent(sceneId, content, user.id);
 

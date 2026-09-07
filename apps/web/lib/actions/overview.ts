@@ -117,14 +117,20 @@ export async function updateActionItem(
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.actionItem.update({ where: { id: itemId }, data });
+  // assertProjectOwnership only proves the CALLER owns `projectId` -- the
+  // compound where below is what stops them from passing someone ELSE's
+  // itemId alongside a project they genuinely own (see the note in
+  // shared.ts above assertNodeInProject/assertSceneInProject).
+  const result = await prisma.actionItem.updateMany({ where: { id: itemId, projectId }, data });
+  if (result.count === 0) throw new Error("That item isn't part of this project.");
 }
 
 export async function deleteActionItem(itemId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
 
-  await prisma.actionItem.delete({ where: { id: itemId } });
+  const result = await prisma.actionItem.deleteMany({ where: { id: itemId, projectId } });
+  if (result.count === 0) throw new Error("That item isn't part of this project.");
 }
 
 export async function reorderActionItems(
@@ -133,6 +139,12 @@ export async function reorderActionItems(
 ) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
+
+  const ids = updates.map((u) => u.id);
+  const ownedCount = await prisma.actionItem.count({ where: { id: { in: ids }, projectId } });
+  if (ownedCount !== ids.length) {
+    throw new Error("One or more of those items aren't part of this project.");
+  }
 
   await prisma.$transaction(
     updates.map((u) =>
