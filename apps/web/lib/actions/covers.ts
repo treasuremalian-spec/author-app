@@ -20,3 +20,20 @@ export async function updateProjectCover(projectId: string, coverImageUrl: strin
   revalidatePath("/library");
   revalidatePath(`/projects/${projectId}`);
 }
+
+// A book-wide background image for the print PDF only (author request,
+// 2026-09-07) -- same save-the-URL-after-a-direct-client-upload pattern as
+// the cover above, uploaded to the same "covers" Storage bucket (no new
+// bucket/migration needed -- its RLS policy is generic to any file under
+// the uploader's own folder prefix, see BackgroundImageUploadButton.tsx).
+export async function updateProjectBackgroundImage(projectId: string, backgroundImageUrl: string | null) {
+  const user = await requireUser();
+  await assertProjectOwnership(projectId, user.id);
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { backgroundImageUrl },
+  });
+
+  revalidatePath(`/projects/${projectId}/format`);
+}

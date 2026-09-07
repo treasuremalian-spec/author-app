@@ -175,6 +175,13 @@ model Project {
 
   title        String
   coverImageUrl String?
+  // A book-wide background image for the print PDF only (author request,
+  // 2026-09-07: full-page images behind the text, either on every page or
+  // just each chapter's opening page -- see PrintOptions.backgroundImageMode
+  // in print-html.ts). Never used by the EPUB export -- Tasia asked for
+  // this to be print-only, and a reflowable EPUB has no fixed "page" for a
+  // background to sit behind anyway.
+  backgroundImageUrl String?
   status       ProjectStatus @default(IDEA)
   genres       String[]      @default([])
 

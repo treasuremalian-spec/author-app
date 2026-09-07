@@ -35,6 +35,23 @@ export interface PreviewOptions {
    * each chapter still gets its own clearly separated block as you scroll,
    * just without the visible heading text. */
   showChapterTitles: boolean;
+  /** The book's background image (Project.backgroundImageUrl), if one has
+   * been uploaded -- null shows no background regardless of mode below.
+   * PDF-only feature (author request, 2026-09-07); this preview only
+   * approximates it, since a real PDF page and this continuously-scrolled
+   * preview aren't the same shape (see backgroundImageMode below). */
+  backgroundImageUrl: string | null;
+  /** Mirrors PrintOptions.backgroundImageMode (print-html.ts). "every_page"
+   * paints the background behind the whole scrollable preview window,
+   * which is the closest single-page-shaped stand-in this preview has for
+   * "every page of the real PDF." "chapter_start" can't be shown the same
+   * way a real paginated PDF shows it (this preview has no discrete
+   * pages) -- instead each chapter gets one page-shaped band, sized to
+   * the chosen trim's real aspect ratio, with the background image behind
+   * just its opening title, then the chapter's normal (background-free)
+   * body text continues below it -- an honest approximation of "only the
+   * first page of this chapter," not a literal pagination. */
+  backgroundImageMode: "none" | "every_page" | "chapter_start";
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -63,6 +80,9 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
   // inside it and overflow-y: auto, that box becomes a page-shaped WINDOW
   // the author scrolls the manuscript through, rather than a single fixed
   // page (see the file comment above).
+  const showEveryPageBackground = options.backgroundImageMode === "every_page" && !!options.backgroundImageUrl;
+  const showChapterStartBackground = options.backgroundImageMode === "chapter_start" && !!options.backgroundImageUrl;
+
   const pageStyle: CSSProperties = {
     aspectRatio: `${widthIn} / ${heightIn}`,
     paddingTop: `${(MARGIN_TOP_IN / widthIn) * 100}%`,
@@ -71,6 +91,14 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     paddingRight: `${(marginRightIn / widthIn) * 100}%`,
     overflowY: "auto",
     overflowX: "hidden",
+    ...(showEveryPageBackground
+      ? {
+          backgroundImage: `url(${options.backgroundImageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }
+      : {}),
   };
 
   const bodyStyle: CSSProperties = {
@@ -92,8 +120,20 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           {data ? (
             chapters.map((chapter, index) => (
               <section key={index} className={`format-preview-page__chapter${index > 0 ? " format-preview-page__chapter--break" : ""}`}>
-                {options.showChapterTitles && (
-                  <h1 className="format-preview-page__title">{chapter.title}</h1>
+                {showChapterStartBackground ? (
+                  <div
+                    className="format-preview-page__chapter-start-band"
+                    style={{
+                      aspectRatio: `${widthIn} / ${heightIn}`,
+                      backgroundImage: `url(${options.backgroundImageUrl})`,
+                    }}
+                  >
+                    {options.showChapterTitles && (
+                      <h1 className="format-preview-page__title format-preview-page__title--on-band">{chapter.title}</h1>
+                    )}
+                  </div>
+                ) : (
+                  options.showChapterTitles && <h1 className="format-preview-page__title">{chapter.title}</h1>
                 )}
                 <div
                   className={`format-preview-page__body${options.dropCaps ? " format-preview-page__body--drop-cap" : ""}${
@@ -131,6 +171,31 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           letter-spacing: 0.04em;
           font-size: 1.6em;
           margin: 0 0 1.4em;
+        }
+        .format-preview-page__chapter-start-band {
+          position: relative;
+          width: 100%;
+          margin: 0 0 1.4em;
+          background-size: cover;
+          background-position: center;
+          background-repeat: no-repeat;
+          border-radius: 0.25em;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .format-preview-page__chapter-start-band::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.55) 100%);
+        }
+        .format-preview-page__title--on-band {
+          position: relative;
+          color: #fff;
+          text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+          margin: 0 0 0.9em;
         }
         .format-preview-page__body p {
           margin: 0;

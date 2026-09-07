@@ -34,6 +34,12 @@ function parseLineSpacing(value: string | null): number | undefined {
   return n;
 }
 
+function parseBackgroundImageMode(value: string | null): PrintOptions["backgroundImageMode"] {
+  if (value === "every_page" || value === "chapter_start") return value;
+  if (value === "none") return "none";
+  return undefined;
+}
+
 function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
   return {
     mirroredMargins: parseBoolParam(searchParams.get("mirroredMargins")),
@@ -41,6 +47,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     dropCaps: parseBoolParam(searchParams.get("dropCaps")),
     chapterStartsOnRight: parseBoolParam(searchParams.get("chapterStartsOnRight")),
     showChapterTitles: parseBoolParam(searchParams.get("showChapterTitles")),
+    backgroundImageMode: parseBackgroundImageMode(searchParams.get("backgroundImageMode")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
   };
 }

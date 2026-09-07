@@ -18,6 +18,7 @@ import type { TrimSize } from "@author-app/formatting-engine/trim-sizes";
 import type { FormatPreviewData } from "@/lib/actions/format";
 import { FormatPreview } from "./FormatPreview";
 import { ReimportManuscriptDialog } from "./ReimportManuscriptDialog";
+import { BackgroundImageUploadButton } from "./BackgroundImageUploadButton";
 
 interface PrintOptionsState {
   mirroredMargins: boolean;
@@ -26,6 +27,15 @@ interface PrintOptionsState {
   chapterStartsOnRight: boolean;
   showChapterTitles: boolean;
   lineSpacing: string;
+  /** "none" (default), "every_page", or "chapter_start" -- see
+   * PrintOptions.backgroundImageMode in print-html.ts. Has no visible
+   * effect until a background image has actually been uploaded (see the
+   * backgroundImageUrl state in FormatWorkspace below, not part of this
+   * options bag since it's a persisted per-project asset, not a
+   * per-export choice). PDF-only, per author request 2026-09-07 ("those
+   * will only show up in PDF files not the epub") -- never sent to the
+   * EPUB download link. */
+  backgroundImageMode: "none" | "every_page" | "chapter_start";
 }
 
 const DEFAULT_OPTIONS: PrintOptionsState = {
@@ -35,6 +45,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   chapterStartsOnRight: false,
   showChapterTitles: true,
   lineSpacing: "1.5",
+  backgroundImageMode: "none",
 };
 
 function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
@@ -46,6 +57,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     chapterStartsOnRight: options.chapterStartsOnRight ? "1" : "0",
     showChapterTitles: options.showChapterTitles ? "1" : "0",
     lineSpacing: options.lineSpacing,
+    backgroundImageMode: options.backgroundImageMode,
   });
   return `/projects/${projectId}/export/pdf?${params.toString()}`;
 }
@@ -65,8 +77,9 @@ export function FormatWorkspace({
   // server call, which is what keeps the preview feeling "live" rather
   // than round-tripping on every checkbox click.
   const preview = initialPreview;
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(preview.backgroundImageUrl);
 
-  function toggle(key: keyof Omit<PrintOptionsState, "lineSpacing">) {
+  function toggle(key: keyof Omit<PrintOptionsState, "lineSpacing" | "backgroundImageMode">) {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
@@ -153,6 +166,42 @@ export function FormatWorkspace({
                   />
                   Show chapter titles (each chapter still starts on its own page when off)
                 </label>
+
+                <div className="border-t pt-2.5 mt-1">
+                  <p className="text-sm font-medium">Background image (PDF only)</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    A full-page image behind the text -- shows up in the print PDF only, never in the EPUB.
+                  </p>
+                  <div className="mt-2">
+                    <BackgroundImageUploadButton
+                      projectId={projectId}
+                      backgroundImageUrl={backgroundImageUrl}
+                      onChange={setBackgroundImageUrl}
+                    />
+                  </div>
+                  {backgroundImageUrl && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Label htmlFor="background-image-mode" className="text-sm font-normal text-foreground">
+                        Show it
+                      </Label>
+                      <select
+                        id="background-image-mode"
+                        className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                        value={options.backgroundImageMode}
+                        onChange={(event) =>
+                          setOptions((prev) => ({
+                            ...prev,
+                            backgroundImageMode: event.target.value as PrintOptionsState["backgroundImageMode"],
+                          }))
+                        }
+                      >
+                        <option value="none">Not at all</option>
+                        <option value="every_page">Behind every page</option>
+                        <option value="chapter_start">Behind each chapter&apos;s first page only</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-2 pt-1">
                   <Label htmlFor="line-spacing" className="text-sm font-normal text-foreground">
@@ -241,6 +290,8 @@ export function FormatWorkspace({
             lineSpacing: options.lineSpacing,
             trimSize: previewTrim,
             showChapterTitles: options.showChapterTitles,
+            backgroundImageUrl,
+            backgroundImageMode: options.backgroundImageMode,
           }}
         />
       </div>

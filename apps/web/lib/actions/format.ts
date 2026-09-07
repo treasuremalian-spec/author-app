@@ -58,6 +58,12 @@ export interface FormatPreviewData {
    * exported PDF page, not just the ones with an image on them (see
    * BLEED_IN in print-html.ts). */
   hasSpreadImage: boolean;
+  /** The book-wide background image for the print PDF's "behind the
+   * text" option (author request, 2026-09-07), if one has been uploaded --
+   * lets FormatWorkspace seed BackgroundImageUploadButton without a
+   * second fetch. Print-only; the live preview and EPUB never use this
+   * for anything but the small upload-button thumbnail. */
+  backgroundImageUrl: string | null;
 }
 
 const PASSTHROUGH_IMAGE_CTX: RenderContext = { resolveImage: (src) => src };
@@ -153,5 +159,6 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
     author: authorProfile?.displayName || user.email || "Unknown Author",
     chapters: previewChapters,
     hasSpreadImage,
+    backgroundImageUrl: project.backgroundImageUrl,
   };
 }

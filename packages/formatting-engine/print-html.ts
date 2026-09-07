@@ -37,7 +37,7 @@
 // before shipping.
 
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
-import type { EpubBookInput, EpubChapter, EpubPart, EpubSection } from "./build-epub";
+import type { EpubBookInput, EpubChapter, EpubPart, EpubSection, EpubCoverImage } from "./build-epub";
 import {
   CRIMSON_PRO_REGULAR,
   CRIMSON_PRO_ITALIC,
@@ -117,6 +117,10 @@ function resolvePageDimensions(trimSize: TrimSize, bleedActive: boolean): { widt
 
 export interface PrintBookInput extends EpubBookInput {
   trimSize: TrimSize;
+  /** A book-wide background image for the "behind the text" print option
+   * below -- pre-fetched by export-data.ts exactly like the cover image,
+   * never used by the EPUB export. */
+  backgroundImage?: EpubCoverImage | null;
 }
 
 /** Print-typesetting options -- see the file-level comment above. Every field is optional; omitted fields fall back to DEFAULT_PRINT_OPTIONS, which match this file's previous hardcoded behavior. */
@@ -138,6 +142,16 @@ export interface PrintOptions {
    * for that chapter too, rather than showing a name the author asked to
    * hide. Author request, 2026-09-07: "option to hide chapter/name". */
   showChapterTitles?: boolean;
+  /** Places the book's background image (PrintBookInput.backgroundImage)
+   * behind the text -- "none" (default, no effect even if an image is
+   * set), "every_page" (behind every single page in the book), or
+   * "chapter_start" (behind only each chapter's opening page). Has no
+   * effect if no background image was uploaded. Author request,
+   * 2026-09-07: "full page images to go behind the text of all the
+   * pages.. or just the first page of each chapter" -- print-only, by
+   * request; the EPUB export never reads PrintBookInput.backgroundImage
+   * at all. */
+  backgroundImageMode?: "none" | "every_page" | "chapter_start";
 }
 
 const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
@@ -147,6 +161,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   dropCaps: false,
   chapterStartsOnRight: false,
   showChapterTitles: true,
+  backgroundImageMode: "none",
 };
 
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
@@ -316,11 +331,16 @@ function bookHasSpreadImage(sections: EpubSection[]): boolean {
   return false;
 }
 
-function buildCss(trimSize: TrimSize, options: Required<PrintOptions>, bleedActive: boolean): string {
+function buildCss(
+  trimSize: TrimSize,
+  options: Required<PrintOptions>,
+  bleedActive: boolean,
+  backgroundImageDataUri: string | null
+): string {
   const { widthIn, heightIn } = resolvePageDimensions(trimSize, bleedActive);
   const width = `${widthIn}in`;
   const height = `${heightIn}in`;
-  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight } = options;
+  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight, backgroundImageMode } = options;
   const bleed = bleedActive ? BLEED_IN : 0;
 
   // Base margins (top/right/bottom/left), used as-is when mirroredMargins
@@ -460,6 +480,51 @@ ${
    after pagination finishes, and tags it with this class directly. */
 .pagedjs_page_chapter_start .pagedjs_margin-top-center {
   visibility: hidden;
+}
+${
+  backgroundImageDataUri && backgroundImageMode === "every_page"
+    ? `/* Book-wide background image, behind every page's text (author
+   request, 2026-09-07). ".pagedjs_page" is Paged.js's own per-page box,
+   sized to the full physical page -- painting a background on it directly
+   naturally sits behind the page's actual content, which paints as
+   normal foreground boxes on top, no z-index needed. Verified 2026-09-07
+   against a real local Paged.js + headless-Chromium render (not just
+   reasoned about): both this "every_page" mode and "chapter_start" below
+   were pixel-sampled (a screenshot of each rendered .pagedjs_page box,
+   decoded back to RGB) as well as computed-style-checked, confirming the
+   background actually paints on every intended page and nowhere else.
+   The !important below turned out NOT to be load-bearing in the pinned
+   pagedjs version -- a side-by-side run with !important stripped from
+   just these four declarations still won -- but it's kept anyway as
+   cheap insurance against a future pagedjs upgrade changing its own
+   injected stylesheet's rule order. */
+.pagedjs_page {
+  background-image: url(${backgroundImageDataUri}) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+`
+    : ""
+}
+${
+  backgroundImageDataUri && backgroundImageMode === "chapter_start"
+    ? `/* Book-wide background image, behind only each chapter's OPENING
+   page -- reuses the exact same real per-page marker render-pdf.ts
+   already tags for hiding the running header on a chapter's first page
+   (see the long comment above), rather than inventing a second
+   mechanism for "the first page of this chapter." Verified 2026-09-07
+   the same way as "every_page" above -- pixel-sampled a real paginated,
+   multi-chapter render and confirmed the background shows on exactly the
+   two .pagedjs_page_chapter_start pages and nowhere else. */
+.pagedjs_page_chapter_start {
+  background-image: url(${backgroundImageDataUri}) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+`
+    : ""
 }
 
 html, body {
@@ -744,9 +809,20 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     dropCaps: options.dropCaps ?? DEFAULT_PRINT_OPTIONS.dropCaps,
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
     showChapterTitles: options.showChapterTitles ?? DEFAULT_PRINT_OPTIONS.showChapterTitles,
+    backgroundImageMode: options.backgroundImageMode ?? DEFAULT_PRINT_OPTIONS.backgroundImageMode,
   };
 
   const bleedActive = bookHasSpreadImage(book.sections);
+
+  // Same embed-as-data-URI reasoning as the inline manuscriptImage ctx
+  // below -- a single in-memory HTML string has nowhere else to point a
+  // background-image url() at. null (no image uploaded, or its fetch
+  // failed at export time) simply means the CSS rules in buildCss below
+  // render nothing, same fail-soft behavior as every other image in this
+  // pipeline.
+  const backgroundImageDataUri = book.backgroundImage
+    ? `data:${book.backgroundImage.mimeType};base64,${Buffer.from(book.backgroundImage.bytes).toString("base64")}`
+    : null;
 
   // Images are embedded as data: URIs -- a single in-memory HTML string
   // (which is all Paged.js/Puppeteer render from, see render-pdf.ts) has
@@ -782,7 +858,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
 <head>
 <meta charset="utf-8"/>
 <title>${escapeXml(book.title)}</title>
-<style>${buildCss(book.trimSize, resolved, bleedActive)}</style>
+<style>${buildCss(book.trimSize, resolved, bleedActive, backgroundImageDataUri)}</style>
 </head>
 <body>
 <section class="titlepage">

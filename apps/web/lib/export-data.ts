@@ -52,6 +52,12 @@ export interface BookForExport {
    * bugfix in tiptap-to-xhtml.ts, its caption -- is dropped rather than
    * shipping a broken reference). */
   images: Record<string, EpubCoverImage>;
+  /** The project's book-wide background image for the print PDF's
+   * "behind the text" option (author request, 2026-09-07) -- pre-fetched
+   * the same fail-soft way as the cover, print-only (the EPUB export
+   * never reads this field). null when no background image is set, or its
+   * fetch failed at export time. */
+  backgroundImage: EpubCoverImage | null;
 }
 
 const MIME_TO_EXTENSION: Record<string, string> = {
@@ -162,9 +168,10 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     return { kind: "chapter" as const, chapter: toChapter(root) };
   });
 
-  const [cover, images] = await Promise.all([
+  const [cover, images, backgroundImage] = await Promise.all([
     loadCoverImage(project.coverImageUrl),
     loadInlineImages(sections),
+    loadCoverImage(project.backgroundImageUrl),
   ]);
 
   return {
@@ -174,6 +181,7 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     sections,
     cover,
     images,
+    backgroundImage,
   };
 }
 
