@@ -18,6 +18,7 @@ import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
 import { EditorToolbar } from "./Toolbar";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
+import { SprintPanel } from "@/components/sprints/SprintPanel";
 
 const AUTOSAVE_DELAY_MS = 1500;
 const RETRY_DELAY_MS = 4000;
@@ -72,6 +73,7 @@ export function SceneEditor({
   const [status, setStatus] = useState<"saving" | "saved" | "error">("saved");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [sprinting, setSprinting] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always mirrors the newest edited content that hasn't been confirmed saved
   // yet. Read by the flush-on-unmount cleanup and the beforeunload guard, so
@@ -179,7 +181,8 @@ export function SceneEditor({
 
   return (
     <div className={cn("flex h-full flex-col bg-muted/30", focusMode && "fixed inset-0 z-40 bg-muted/50")}>
-      <PresenceHeartbeat status="WRITING" />
+      <PresenceHeartbeat status={sprinting ? "SPRINTING" : "WRITING"} />
+      <SprintPanel onActiveChange={setSprinting} />
       <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
         <p className="truncate font-display text-base font-semibold">{title}</p>
         <div className="flex shrink-0 items-center gap-3 text-xs">

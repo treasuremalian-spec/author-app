@@ -21,12 +21,23 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-export function CreateSprintDialog({ friends }: { friends: FriendItem[] }) {
+interface CreateSprintDialogProps {
+  friends: FriendItem[];
+  // When provided, a solo sprint starts immediately (no waiting room --
+  // there's no one else to wait for) and this fires with the new sprint's
+  // id instead of navigating to /sprints/[id]. Used to embed this dialog
+  // in the in-editor sprint panel, where staying on the writing page is
+  // the whole point. Omitted (the /sprints page's usage): unchanged
+  // behavior, always navigates to the sprint room after creating.
+  onCreated?: (sprintId: string) => void;
+}
+
+export function CreateSprintDialog({ friends, onCreated }: CreateSprintDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [duration, setDuration] = useState<number>(25);
   const [wordGoal, setWordGoal] = useState("");
-  const [visibility, setVisibility] = useState<"public" | "friends" | "solo">("friends");
+  const [visibility, setVisibility] = useState<"public" | "friends" | "solo">("solo");
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
@@ -42,9 +53,14 @@ export function CreateSprintDialog({ friends }: { friends: FriendItem[] }) {
         wordGoal: wordGoal ? Number(wordGoal) : null,
         isPublic: visibility === "public",
         inviteFriendUserIds: visibility === "friends" ? selectedFriendIds : [],
+        autoStart: visibility === "solo",
       });
       setOpen(false);
-      router.push(`/sprints/${sprintId}`);
+      if (onCreated) {
+        onCreated(sprintId);
+      } else {
+        router.push(`/sprints/${sprintId}`);
+      }
     } finally {
       setCreating(false);
     }

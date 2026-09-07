@@ -149,6 +149,12 @@ export interface CreateSprintInput {
   wordGoal?: number | null;
   isPublic: boolean;
   inviteFriendUserIds?: string[];
+  // Skip the waiting room and go straight to ACTIVE. Only ever honored for
+  // an actual solo sprint (see below) -- there's no one else to wait for,
+  // so making the creator click "Start" a second time would just be
+  // friction. Silently ignored for a public/friend-invited sprint, where
+  // waiting for others to join is the whole point.
+  autoStart?: boolean;
 }
 
 export async function createSprint(input: CreateSprintInput): Promise<{ sprintId: string }> {
@@ -160,12 +166,15 @@ export async function createSprint(input: CreateSprintInput): Promise<{ sprintId
   const inviteIds = Array.from(new Set(input.inviteFriendUserIds ?? [])).filter((id) => id !== user.id);
 
   const type: SprintRow["type"] = input.isPublic ? "GROUP" : inviteIds.length > 0 ? "FRIEND" : "SOLO";
+  const autoStart = input.autoStart === true && type === "SOLO";
+  const startedAt = autoStart ? new Date() : null;
 
   const sprint = (await prisma.sprint.create({
     data: {
       creatorId: user.id,
       type,
-      status: "SCHEDULED",
+      status: autoStart ? "ACTIVE" : "SCHEDULED",
+      startedAt,
       durationMinutes,
       wordGoal: input.wordGoal || null,
       isPublic: input.isPublic,
@@ -485,4 +494,30 @@ export async function sendSprintMessage(sprintId: string, text: string): Promise
     data: { sprintId, userId: user.id, text: trimmed },
   });
   revalidatePath(`/sprints/${sprintId}`);
+}
+
+// For the in-editor sprint panel (SprintPanel.tsx) to poll: "does this
+// writer currently have a sprint they should see?" -- SCHEDULED (waiting
+// room) or ACTIVE only, same set listMySprints() already filters to.
+// Delegates to getSprintDetail() for the actual shape rather than
+// duplicating it, so the two never drift out of sync.
+export async function getMyCurrentSprint(): Promise<SprintDetail | null> {
+  const user = await requireUser();
+  const myParticipations = (await prisma.sprintParticipant.findMany({
+    where: { userId: user.id },
+    select: { sprintId: true },
+  })) as { sprintId: string }[];
+  const sprintIds = Array.from(new Set(myParticipations.map((p) => p.sprintId)));
+  if (sprintIds.length === 0) return null;
+
+  const sprints = (await prisma.sprint.findMany({
+    where: { id: { in: sprintIds }, status: { in: ["SCHEDULED", "ACTIVE"] } },
+    orderBy: { createdAt: "desc" },
+  })) as SprintRow[];
+  if (sprints.length === 0) return null;
+
+  // In the unlikely case of more than one, an ACTIVE one is always more
+  // relevant to surface than a SCHEDULED one.
+  const preferred = sprints.find((s) => s.status === "ACTIVE") ?? sprints[0];
+  return getSprintDetail(preferred.id);
 }
