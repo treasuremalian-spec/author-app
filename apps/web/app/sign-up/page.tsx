@@ -18,7 +18,7 @@ export default async function SignUpPage({
         <CardHeader>
           <CardTitle>Create your author account</CardTitle>
           <CardDescription>
-            You're joining a private beta -- welcome in.
+            You&apos;re joining a private beta -- welcome in.
           </CardDescription>
         </CardHeader>
         <CardContent>
