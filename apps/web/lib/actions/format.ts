@@ -9,10 +9,17 @@
 // preview's needs are deliberately much lighter than a real export: it
 // does NOT fetch image bytes (the browser can just hit the image's own
 // public Supabase URL directly -- unlike a PDF renderer or an EPUB zip,
-// a live browser preview has somewhere else to point <img src> at), and
-// it only renders the book's first chapter with real content rather than
-// the whole manuscript, so opening the tab on a full-length novel stays
-// fast.
+// a live browser preview has somewhere else to point <img src> at).
+//
+// Renders EVERY chapter (2026-09-07, per author request: "ability to
+// scroll the entire book in the preview" -- previously this only rendered
+// the book's first chapter with content, and FormatPreview.tsx showed a
+// single fixed, unscrollable page). Still fast even for a full-length
+// novel: this is the same synchronous JSON-tree walk sceneContentToXhtml
+// always did, just run once per scene across the whole book instead of
+// stopping after the first chapter's first two -- no network calls, no
+// headless-browser rendering (that's what the real PDF export pipeline is
+// for).
 
 import { prisma } from "@author-app/database";
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, type RenderContext } from "@author-app/formatting-engine";
@@ -29,15 +36,22 @@ type NodeWithScene = {
   scene: { id: string; content: unknown } | null;
 };
 
+export interface FormatPreviewChapter {
+  title: string;
+  /** Pre-rendered XHTML of this chapter's non-empty scenes -- image src
+   * attributes are left as their real Supabase Storage public URLs (see
+   * the file comment above), so the browser fetches them directly rather
+   * than this needing to embed any bytes. */
+  html: string;
+}
+
 export interface FormatPreviewData {
   title: string;
   author: string;
-  chapterTitle: string;
-  /** Pre-rendered XHTML of the first chapter that actually has content --
-   * image src attributes are left as their real Supabase Storage public
-   * URLs (see the file comment above), so the browser fetches them
-   * directly rather than this needing to embed any bytes. */
-  chapterHtml: string;
+  /** Every chapter in the book, in reading order -- the preview pane
+   * scrolls through all of them (see the file comment above), not just
+   * the opening. */
+  chapters: FormatPreviewChapter[];
   /** Whether ANY scene anywhere in the book has a full-spread image --
    * shown as a small "this book will print with real bleed" note next to
    * the print options, since it changes the physical page size of every
@@ -49,11 +63,10 @@ export interface FormatPreviewData {
 const PASSTHROUGH_IMAGE_CTX: RenderContext = { resolveImage: (src) => src };
 
 /** Light data for the Format tab's live preview pane -- the book's
- * title/author plus the first chapter (by manuscript order) that actually
- * has written content, rendered the same way export renders it (so the
- * preview's typography genuinely reflects what tiptap-to-xhtml.ts
- * produces) but skipping the image-byte-fetching work loadBookForExport
- * does for a real export. */
+ * title/author plus every chapter, rendered the same way export renders
+ * it (so the preview's typography genuinely reflects what
+ * tiptap-to-xhtml.ts produces) but skipping the image-byte-fetching work
+ * loadBookForExport does for a real export. */
 export async function getFormatPreviewData(projectId: string): Promise<FormatPreviewData> {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);
@@ -96,8 +109,8 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
   const roots = buildTree(treeNodes);
 
   // Flatten to CHAPTER nodes in reading order, regardless of whether
-  // they're nested under a PART -- the preview doesn't need to render
-  // part dividers, just find the first chapter with real prose.
+  // they're nested under a PART -- the preview doesn't render part
+  // dividers as their own page, just the chapters in sequence.
   const chapters: typeof roots = [];
   for (const root of roots) {
     if (root.type === "CHAPTER") chapters.push(root);
@@ -115,32 +128,30 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
     }
   }
 
-  const previewChapter =
-    chapters.find((c) => c.children.some((s) => s.scene && !isSceneContentEmpty(s.scene.content))) ?? chapters[0];
-
-  let chapterHtml = "";
-  let chapterTitle = previewChapter?.title || "Chapter One";
-  if (previewChapter) {
-    const sceneHtmls = previewChapter.children
+  const previewChapters: FormatPreviewChapter[] = chapters.map((chapter, index) => {
+    const sceneHtmls = chapter.children
       .filter((s) => s.scene && !isSceneContentEmpty(s.scene.content))
-      // Cap to the first two scenes -- plenty to show the formatting
-      // options' effect without rendering an entire chapter (or book) into
-      // a client-side preview pane on every options change.
-      .slice(0, 2)
       .map((s) => sceneContentToXhtml(s.scene!.content, PASSTHROUGH_IMAGE_CTX));
-    chapterHtml = sceneHtmls.join('\n<p class="scene-break">⁂</p>\n');
-  }
-  if (!chapterHtml.trim()) {
-    chapterHtml =
-      "<p>Start writing to see your book take shape here -- this preview mirrors your first chapter as you format it.</p>";
-    chapterTitle = chapterTitle || "Chapter One";
+    return {
+      title: chapter.title?.trim() || `Chapter ${index + 1}`,
+      html: sceneHtmls.join('\n<p class="scene-break">⁂</p>\n'),
+    };
+  });
+
+  // A brand-new project (no chapters yet, or every chapter still blank)
+  // gets one friendly placeholder entry instead of a scrollable stack of
+  // empty headings.
+  if (!previewChapters.some((c) => c.html.trim())) {
+    previewChapters.splice(0, previewChapters.length, {
+      title: previewChapters[0]?.title || "Chapter One",
+      html: "<p>Start writing to see your book take shape here -- this preview mirrors your manuscript as you format it.</p>",
+    });
   }
 
   return {
     title: project.title || "Untitled",
     author: authorProfile?.displayName || user.email || "Unknown Author",
-    chapterTitle: chapterTitle || "Chapter One",
-    chapterHtml,
+    chapters: previewChapters,
     hasSpreadImage,
   };
 }

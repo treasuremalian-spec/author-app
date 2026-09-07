@@ -1,23 +1,25 @@
 "use client";
 
 // The Format tab's live preview pane (see FormatWorkspace.tsx) -- a
-// single scaled "page" showing the book's first written chapter, restyled
-// instantly (no server round-trip) as the author toggles print options.
-// This is deliberately NOT a real Paged.js pagination preview -- running
-// the actual headless-Chromium PDF pipeline (see render-pdf.ts) on every
-// checkbox click would be far too slow for something meant to feel live,
-// and genuinely isn't needed just to see "does this look right" for one
-// page's worth of margins/indent/line-spacing/drop-caps. Instead this is
-// a plain styled <div> shaped like a page, sized to the real trim-size
-// aspect ratio, using the SAME visual constants (margins, font, drop-cap
-// look) as print-html.ts's buildCss() -- if those numbers change there,
-// they should change here too, so the preview stays honest about what a
-// real export will look like.
+// page-shaped, scrollable window onto the WHOLE manuscript (author
+// request, 2026-09-07: "ability to scroll the entire book in the
+// preview" -- this used to show only a single fixed page of the book's
+// first chapter), restyled instantly (no server round-trip) as the author
+// toggles print options. This is deliberately NOT a real Paged.js
+// pagination preview -- running the actual headless-Chromium PDF pipeline
+// (see render-pdf.ts) on every checkbox click would be far too slow for
+// something meant to feel live, and doesn't change what's needed here:
+// one continuously-flowing column, the width/margins of a real page,
+// that the author scrolls through like a long document -- using the SAME
+// visual constants (margins, font, drop-cap look) as print-html.ts's
+// buildCss() -- if those numbers change there, they should change here
+// too, so the preview stays honest about what a real export will look
+// like.
 //
 // A real PDF export remains the only way to see true pagination (page
 // breaks, running headers/footers, mirrored left/right margins across
-// facing pages) -- this preview only ever shows one page's worth of the
-// opening of the book.
+// facing pages) -- this preview only ever shows one continuous flow, not
+// discrete pages.
 
 import type { CSSProperties } from "react";
 import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "@author-app/formatting-engine/trim-sizes";
@@ -29,6 +31,10 @@ export interface PreviewOptions {
   dropCaps: boolean;
   lineSpacing: string;
   trimSize: TrimSize;
+  /** Mirrors PrintOptions.showChapterTitles (print-html.ts) -- when false,
+   * each chapter still gets its own clearly separated block as you scroll,
+   * just without the visible heading text. */
+  showChapterTitles: boolean;
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -52,12 +58,19 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
   const marginLeftIn = options.mirroredMargins ? MARGIN_INSIDE_IN : FLAT_MARGIN_IN;
   const marginRightIn = options.mirroredMargins ? MARGIN_OUTSIDE_IN : FLAT_MARGIN_IN;
 
+  // The box's aspect-ratio gives it the width/height proportions of one
+  // real page of the chosen trim size -- with the whole book's content
+  // inside it and overflow-y: auto, that box becomes a page-shaped WINDOW
+  // the author scrolls the manuscript through, rather than a single fixed
+  // page (see the file comment above).
   const pageStyle: CSSProperties = {
     aspectRatio: `${widthIn} / ${heightIn}`,
     paddingTop: `${(MARGIN_TOP_IN / widthIn) * 100}%`,
     paddingBottom: `${(MARGIN_BOTTOM_IN / widthIn) * 100}%`,
     paddingLeft: `${(marginLeftIn / widthIn) * 100}%`,
     paddingRight: `${(marginRightIn / widthIn) * 100}%`,
+    overflowY: "auto",
+    overflowX: "hidden",
   };
 
   const bodyStyle: CSSProperties = {
@@ -66,31 +79,39 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     marginBottom: options.indentParagraphs ? undefined : "0.9em",
   };
 
+  const chapters = data?.chapters ?? [];
+
   return (
     <div className="sticky top-4 flex flex-col gap-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live preview</p>
       <div
-        className="w-full overflow-hidden rounded-md border border-border bg-white shadow-sm"
+        className="w-full rounded-md border border-border bg-white shadow-sm"
         style={pageStyle}
       >
         <div className="format-preview-page">
-          <h1 className="format-preview-page__title">{data?.chapterTitle || "Chapter One"}</h1>
           {data ? (
-            <div
-              className={`format-preview-page__body${options.dropCaps ? " format-preview-page__body--drop-cap" : ""}${
-                options.indentParagraphs ? "" : " format-preview-page__body--block"
-              }`}
-              style={bodyStyle}
-              dangerouslySetInnerHTML={{ __html: data.chapterHtml }}
-            />
+            chapters.map((chapter, index) => (
+              <section key={index} className={`format-preview-page__chapter${index > 0 ? " format-preview-page__chapter--break" : ""}`}>
+                {options.showChapterTitles && (
+                  <h1 className="format-preview-page__title">{chapter.title}</h1>
+                )}
+                <div
+                  className={`format-preview-page__body${options.dropCaps ? " format-preview-page__body--drop-cap" : ""}${
+                    options.indentParagraphs ? "" : " format-preview-page__body--block"
+                  }`}
+                  style={bodyStyle}
+                  dangerouslySetInnerHTML={{ __html: chapter.html }}
+                />
+              </section>
+            ))
           ) : (
             <p className="format-preview-page__body">Loading preview...</p>
           )}
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        A quick look at your opening page as you format -- download a PDF to see real pagination, running headers,
-        and page breaks.
+        Scroll to page through your whole manuscript as you format -- download a PDF to see real pagination, running
+        headers, and page breaks.
       </p>
       <style>{`
         .format-preview-page {
@@ -98,6 +119,11 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           color: #1a1a1a;
           font-size: clamp(9px, 1.6cqw, 13px);
           container-type: inline-size;
+        }
+        .format-preview-page__chapter--break {
+          margin-top: 2.6em;
+          padding-top: 2em;
+          border-top: 1px dashed rgba(0, 0, 0, 0.12);
         }
         .format-preview-page__title {
           text-align: center;

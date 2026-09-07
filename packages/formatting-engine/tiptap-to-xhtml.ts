@@ -249,9 +249,19 @@ export function docHasSpreadImage(doc: unknown): boolean {
 export function isSceneContentEmpty(doc: unknown): boolean {
   const root = doc as DocNode | null | undefined;
   if (!root || !Array.isArray(root.content)) return true;
-  const hasText = (node: DocNode): boolean => {
+  // A scene counts as having content if it has actual prose OR a
+  // manuscriptImage node -- an image-only scene (a full-page "spread"
+  // photo, or a "header"/"caption" image with no separate body paragraph)
+  // has no "text" node anywhere in its tree, so without this check it read
+  // as empty and got silently filtered out of every export entirely,
+  // image and all (the bug behind the 2026-09-07 "images need to show in
+  // epub" report -- the same filter runs in print-html.ts and
+  // apps/web/lib/actions/format.ts's preview-chapter picker, so this one
+  // fix covers EPUB, print PDF, and the Format tab's live preview).
+  const hasContent = (node: DocNode): boolean => {
     if (node.type === "text" && (node.text ?? "").trim()) return true;
-    return (node.content ?? []).some(hasText);
+    if (node.type === "manuscriptImage") return true;
+    return (node.content ?? []).some(hasContent);
   };
-  return !root.content.some(hasText);
+  return !root.content.some(hasContent);
 }

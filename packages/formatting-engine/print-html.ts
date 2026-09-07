@@ -131,6 +131,13 @@ export interface PrintOptions {
   dropCaps?: boolean;
   /** Force every chapter (and part) to start on a right-hand page, inserting a blank page when needed. */
   chapterStartsOnRight?: boolean;
+  /** Show each chapter's title/name at its opening page. When false, a
+   * chapter still starts on its own fresh page (the break-before structure
+   * is unchanged) but with no visible heading text -- and, since there's
+   * no title to show, the running header's chapter-title line goes blank
+   * for that chapter too, rather than showing a name the author asked to
+   * hide. Author request, 2026-09-07: "option to hide chapter/name". */
+  showChapterTitles?: boolean;
 }
 
 const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
@@ -139,6 +146,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   lineSpacing: 1.5,
   dropCaps: false,
   chapterStartsOnRight: false,
+  showChapterTitles: true,
 };
 
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
@@ -243,7 +251,7 @@ function markChapterFirstParagraph(html: string): string {
   return `${before}${newOpenTag}${leadingTags}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
-function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx?: RenderContext): string {
+function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx: RenderContext | undefined, showChapterTitles: boolean): string {
   const label = chapter.title?.trim() || `Chapter ${chapterNumber}`;
   let seenFirstScene = false;
   const scenesHtml = chapter.scenes
@@ -256,19 +264,30 @@ function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx?: RenderCo
     .join("\n");
   const markedScenesHtml = markChapterFirstParagraph(scenesHtml);
 
+  // No <h1> at all (not just visually hidden) when titles are off -- this
+  // also means nothing ever calls "string-set: chaptertitle" for this
+  // chapter, so @top-center's "content: string(chaptertitle)" correctly
+  // renders blank on its pages instead of carrying over a stale title.
+  const titleHtml = showChapterTitles ? `\n    <h1 class="chapter-title">${escapeXml(label)}</h1>` : "";
+  const chapterStartClass = showChapterTitles ? "chapter-start" : "chapter-start chapter-start--untitled";
+
   return `<section class="chapter">
-  <div class="chapter-start">
-    <h1 class="chapter-title">${escapeXml(label)}</h1>
+  <div class="${chapterStartClass}">${titleHtml}
   </div>
   ${markedScenesHtml}
 </section>`;
 }
 
-function partHtml(part: EpubPart, chapterNumberStart: number, ctx?: RenderContext): { html: string; nextChapterNumber: number } {
+function partHtml(
+  part: EpubPart,
+  chapterNumberStart: number,
+  ctx: RenderContext | undefined,
+  showChapterTitles: boolean
+): { html: string; nextChapterNumber: number } {
   let chapterNumber = chapterNumberStart;
   const chaptersHtml = part.chapters
     .map((chapter) => {
-      const html = chapterHtml(chapter, chapterNumber, ctx);
+      const html = chapterHtml(chapter, chapterNumber, ctx, showChapterTitles);
       chapterNumber += 1;
       return html;
     })
@@ -691,6 +710,14 @@ ${
   margin: 0;
   text-indent: 0;
 }
+/* Titles hidden (see PrintOptions.showChapterTitles): the chapter still
+   gets its own fresh page (break-before is set on .chapter-start itself,
+   unaffected by this), just with a smaller, plain gap up top instead of
+   the full title-sized one -- an empty 1.6in block with nothing in it
+   would read as a rendering bug, not a deliberate blank heading. */
+.chapter-start--untitled {
+  padding-top: 0.9in;
+}
 `;
 }
 
@@ -716,6 +743,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     lineSpacing: options.lineSpacing ?? DEFAULT_PRINT_OPTIONS.lineSpacing,
     dropCaps: options.dropCaps ?? DEFAULT_PRINT_OPTIONS.dropCaps,
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
+    showChapterTitles: options.showChapterTitles ?? DEFAULT_PRINT_OPTIONS.showChapterTitles,
   };
 
   const bleedActive = bookHasSpreadImage(book.sections);
@@ -739,11 +767,11 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
   const sectionsHtml = book.sections
     .map((section: EpubSection) => {
       if (section.kind === "part") {
-        const result = partHtml(section.part, chapterNumber, ctx);
+        const result = partHtml(section.part, chapterNumber, ctx, resolved.showChapterTitles);
         chapterNumber = result.nextChapterNumber;
         return result.html;
       }
-      const html = chapterHtml(section.chapter, chapterNumber, ctx);
+      const html = chapterHtml(section.chapter, chapterNumber, ctx, resolved.showChapterTitles);
       chapterNumber += 1;
       return html;
     })

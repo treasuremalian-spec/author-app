@@ -24,6 +24,7 @@ interface PrintOptionsState {
   indentParagraphs: boolean;
   dropCaps: boolean;
   chapterStartsOnRight: boolean;
+  showChapterTitles: boolean;
   lineSpacing: string;
 }
 
@@ -32,6 +33,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   indentParagraphs: true,
   dropCaps: false,
   chapterStartsOnRight: false,
+  showChapterTitles: true,
   lineSpacing: "1.5",
 };
 
@@ -42,6 +44,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     indentParagraphs: options.indentParagraphs ? "1" : "0",
     dropCaps: options.dropCaps ? "1" : "0",
     chapterStartsOnRight: options.chapterStartsOnRight ? "1" : "0",
+    showChapterTitles: options.showChapterTitles ? "1" : "0",
     lineSpacing: options.lineSpacing,
   });
   return `/projects/${projectId}/export/pdf?${params.toString()}`;
@@ -141,6 +144,16 @@ export function FormatWorkspace({
                   Start every chapter on a right-hand page (adds a blank page when needed)
                 </label>
 
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 rounded border-input"
+                    checked={options.showChapterTitles}
+                    onChange={() => toggle("showChapterTitles")}
+                  />
+                  Show chapter titles (each chapter still starts on its own page when off)
+                </label>
+
                 <div className="flex items-center gap-2 pt-1">
                   <Label htmlFor="line-spacing" className="text-sm font-normal text-foreground">
                     Line spacing
@@ -227,6 +240,7 @@ export function FormatWorkspace({
             dropCaps: options.dropCaps,
             lineSpacing: options.lineSpacing,
             trimSize: previewTrim,
+            showChapterTitles: options.showChapterTitles,
           }}
         />
       </div>

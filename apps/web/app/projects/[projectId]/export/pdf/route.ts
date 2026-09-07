@@ -40,6 +40,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     indentParagraphs: parseBoolParam(searchParams.get("indentParagraphs")),
     dropCaps: parseBoolParam(searchParams.get("dropCaps")),
     chapterStartsOnRight: parseBoolParam(searchParams.get("chapterStartsOnRight")),
+    showChapterTitles: parseBoolParam(searchParams.get("showChapterTitles")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
   };
 }
