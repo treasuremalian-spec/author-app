@@ -378,8 +378,15 @@ async function buildSprintListItems(sprints: SprintRow[], userId: string): Promi
   })) as AuthorProfileRow[];
   const creatorByUserId = new Map(creatorProfiles.map((p) => [p.userId, p]));
 
+  // Prisma's groupBy() has a notoriously finicky generic signature -- the
+  // "by" array needs to be a literal tuple type (via "as const"), not a
+  // plain string[], for its conditional-type overload resolution to work
+  // against a real, freshly generated client. Without "as const" this
+  // type-checks fine locally (this sandbox's Prisma client is permanently
+  // stale/untyped -- see docs/decisions), but fails Vercel's build, which
+  // always regenerates a fresh client first.
   const participantCounts = (await prisma.sprintParticipant.groupBy({
-    by: ["sprintId"],
+    by: ["sprintId"] as const,
     where: { sprintId: { in: sprints.map((s) => s.id) } },
     _count: { userId: true },
   })) as { sprintId: string; _count: { userId: number } }[];
