@@ -65,7 +65,14 @@ async function writeChaptersToProject(projectId: string, chapters: ParsedChapter
                 type: "SCENE",
                 title: "Scene 1",
                 orderIndex: 0,
-                scene: { create: { content: chapter.content } },
+                // Cast to object, same as scene-save.ts's autosave path -- Prisma's
+                // generated Json input type wants an index-signature-compatible
+                // InputJsonValue, which a concretely-typed value like ParsedChapter's
+                // (built from the DocNode interface) does not structurally satisfy even
+                // though it IS plain JSON-compatible data at runtime. Confirmed
+                // 2026-09-07 via a real Vercel build log (this sandbox's stale local
+                // Prisma client can't catch this -- see project memory).
+                scene: { create: { content: chapter.content as object } },
               },
             ],
           },
