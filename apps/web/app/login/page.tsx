@@ -50,6 +50,15 @@ export default async function LoginPage({
               Create an account
             </Link>
           </p>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            <Link href="/terms" className="underline-offset-4 hover:underline">
+              Terms of Service
+            </Link>{" "}
+            &middot;{" "}
+            <Link href="/privacy" className="underline-offset-4 hover:underline">
+              Privacy Policy
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>
