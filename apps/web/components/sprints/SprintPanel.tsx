@@ -8,6 +8,7 @@ import {
   startSprint,
   leaveSprint,
   cancelSprint,
+  endSprintEarly,
   type SprintDetail,
 } from "@/lib/actions/sprints";
 import { listFriends, type FriendItem } from "@/lib/actions/friends";
@@ -191,6 +192,17 @@ export function SprintPanel({ onActiveChange }: { onActiveChange?: (active: bool
                     </li>
                   ))}
                 </ul>
+                {sprint.isCreator && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full text-muted-foreground"
+                    disabled={busy}
+                    onClick={() => void withBusy(() => endSprintEarly(sprint.id))}
+                  >
+                    End sprint early
+                  </Button>
+                )}
                 {sprint.participants.length > 1 && <SprintChat sprintId={sprint.id} />}
               </div>
             )}

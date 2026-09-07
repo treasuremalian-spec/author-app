@@ -119,11 +119,11 @@ async function getUserTotalWordCount(userId: string): Promise<number> {
  * actions) rather than a background job, consistent with the rest of
  * this app's no-cron architecture -- whoever next looks at the sprint is
  * the one who finalizes it. */
-async function finalizeIfExpired(sprint: SprintRow): Promise<SprintRow> {
-  if (sprint.status !== "ACTIVE" || !sprint.startedAt) return sprint;
-  const endsAt = sprint.startedAt.getTime() + sprint.durationMinutes * 60 * 1000;
-  if (Date.now() < endsAt) return sprint;
-
+// Captures every participant's final word count and flips the sprint to
+// COMPLETED -- shared by finalizeIfExpired() (the clock ran out) and
+// endSprintEarly() (the creator stopped it on purpose). Doesn't check
+// status itself -- callers decide when finalizing is appropriate.
+async function finalizeSprintNow(sprint: SprintRow): Promise<SprintRow> {
   const participants = (await prisma.sprintParticipant.findMany({
     where: { sprintId: sprint.id },
   })) as SprintParticipantRow[];
@@ -142,6 +142,28 @@ async function finalizeIfExpired(sprint: SprintRow): Promise<SprintRow> {
     where: { id: sprint.id },
     data: { status: "COMPLETED", endedAt: new Date() },
   })) as SprintRow;
+}
+
+async function finalizeIfExpired(sprint: SprintRow): Promise<SprintRow> {
+  if (sprint.status !== "ACTIVE" || !sprint.startedAt) return sprint;
+  const endsAt = sprint.startedAt.getTime() + sprint.durationMinutes * 60 * 1000;
+  if (Date.now() < endsAt) return sprint;
+  return finalizeSprintNow(sprint);
+}
+
+// Lets the creator stop the clock and lock in results before time is up --
+// same "words actually written during the window" scoring either way,
+// just a shorter window. Same authority level as cancelSprint()/
+// startSprint(): creator only.
+export async function endSprintEarly(sprintId: string): Promise<void> {
+  const user = await requireUser();
+  const sprint = (await prisma.sprint.findUnique({ where: { id: sprintId } })) as SprintRow | null;
+  if (!sprint || sprint.creatorId !== user.id || sprint.status !== "ACTIVE") {
+    throw new Error("Only the sprint's creator can end it early, and only while it's running.");
+  }
+  await finalizeSprintNow(sprint);
+  revalidatePath("/sprints");
+  revalidatePath(`/sprints/${sprintId}`);
 }
 
 export interface CreateSprintInput {

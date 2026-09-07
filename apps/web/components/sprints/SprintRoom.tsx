@@ -11,6 +11,7 @@ import {
   joinSprint,
   leaveSprint,
   cancelSprint,
+  endSprintEarly,
   type SprintDetail,
 } from "@/lib/actions/sprints";
 import { PresenceDot } from "@/components/presence/PresenceDot";
@@ -157,6 +158,19 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
                 Go write
               </Link>
             </Button>
+            {sprint.isCreator && (
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 text-muted-foreground"
+                  disabled={busy}
+                  onClick={() => void withBusy(() => endSprintEarly(sprintId))}
+                >
+                  End sprint early
+                </Button>
+              </div>
+            )}
           </>
         )}
 
