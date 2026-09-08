@@ -640,6 +640,29 @@ p {
 }
 .manuscript-image-figure--header .manuscript-image {
   max-width: 45%;
+  /* A "header" image is meant to be modest -- "a small image under the
+     chapter title," not something that can eat the whole opening page.
+     Capping only the WIDTH (max-width: 45%) wasn't enough: a portrait-
+     oriented photo can still render very tall (height:auto scales with
+     its own aspect ratio, not the page), and once it took up most of the
+     chapter-start page's remaining height (that page also spends 1.6in
+     on .chapter-start's own top padding before the title even starts),
+     there wasn't enough room left for even orphans:2's worth of the
+     first paragraph -- so Paged.js correctly refused to leave a single
+     orphan line behind and pushed the WHOLE paragraph to the next page
+     instead, leaving a big blank gap under the image. Author-reported
+     2026-09-08 ("the image i intend to use as a header pushed my chapter
+     text to the next page instead of directly under the image").
+     Reproduced with a real local Paged.js render across a sweep of
+     portrait aspect ratios (bug appeared right around 2.1:1 and up on a
+     6x9 page) before this fix, and confirmed fixed the same way
+     afterward -- image and first paragraph land on the same page across
+     every aspect ratio tested, extreme ones included. 30% of the book's
+     physical page height leaves comfortable room for the title above and
+     several lines of text below on every trim size, while still letting
+     a normal (non-extreme) portrait photo render close to its full 45%
+     width. */
+  max-height: ${(heightIn * 0.3).toFixed(2)}in;
 }
 .manuscript-image-figure--spread {
   break-before: page;
