@@ -40,6 +40,11 @@ function parseBackgroundImageMode(value: string | null): PrintOptions["backgroun
   return undefined;
 }
 
+function parseBackgroundImageTextColor(value: string | null): PrintOptions["backgroundImageTextColor"] {
+  if (value === "dark" || value === "light") return value;
+  return undefined;
+}
+
 function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
   return {
     mirroredMargins: parseBoolParam(searchParams.get("mirroredMargins")),
@@ -48,6 +53,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     chapterStartsOnRight: parseBoolParam(searchParams.get("chapterStartsOnRight")),
     showChapterTitles: parseBoolParam(searchParams.get("showChapterTitles")),
     backgroundImageMode: parseBackgroundImageMode(searchParams.get("backgroundImageMode")),
+    backgroundImageTextColor: parseBackgroundImageTextColor(searchParams.get("backgroundImageTextColor")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
   };
 }

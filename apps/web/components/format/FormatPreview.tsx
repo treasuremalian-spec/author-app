@@ -52,6 +52,12 @@ export interface PreviewOptions {
    * body text continues below it -- an honest approximation of "only the
    * first page of this chapter," not a literal pagination. */
   backgroundImageMode: "none" | "every_page" | "chapter_start";
+  /** Mirrors PrintOptions.backgroundImageTextColor (print-html.ts).
+   * Author-chosen (request 2026-09-08) in place of the earlier automatic
+   * white wash: the photo now shows at full strength and the author picks
+   * whether the overlaid text reads dark (normal) or light/white. Only
+   * meaningful when backgroundImageMode isn't "none". */
+  backgroundImageTextColor: "dark" | "light";
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -93,16 +99,16 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     overflowX: "hidden",
     ...(showEveryPageBackground
       ? {
-          // Same white "wash" layered on top of the photo as the real PDF
-          // pipeline uses (print-html.ts, fixed 2026-09-08 -- a busy/dark
-          // photo painted at full strength made real body text on top of
-          // it unreadable), so the preview doesn't mislead an author into
-          // thinking their photo will show up bold and undimmed in the
-          // actual export.
-          backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${options.backgroundImageUrl})`,
+          // The photo itself, at full strength -- no dimming layer.
+          // Legibility is the author's own call now (backgroundImageTextColor
+          // below), per request 2026-09-08 ("instead of lighten the
+          // background make an option to have text black or white"),
+          // replacing the earlier automatic white wash.
+          backgroundImage: `url(${options.backgroundImageUrl})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
+          color: options.backgroundImageTextColor === "light" ? "#fff" : undefined,
         }
       : {}),
   };
@@ -131,19 +137,21 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                     className="format-preview-page__chapter-start-band"
                     style={{
                       aspectRatio: `${widthIn} / ${heightIn}`,
-                      // Same white "wash" the real PDF pipeline paints
-                      // over a chapter-start background photo (fixed
-                      // 2026-09-08 -- an unwashed photo made real chapter
-                      // text unreadable on top of it) -- normal dark
-                      // title/body text sits on this band now, matching
-                      // what the actual export renders, not a separate
-                      // white-on-dark "hero image" look this preview used
-                      // to invent on its own.
-                      backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${options.backgroundImageUrl})`,
+                      // The photo itself, at full strength -- no dimming
+                      // layer. The chapter title's own color (dark by
+                      // default, or white -- see backgroundImageTextColor
+                      // below) is the author's legibility choice now,
+                      // replacing the earlier automatic white wash.
+                      backgroundImage: `url(${options.backgroundImageUrl})`,
                     }}
                   >
                     {options.showChapterTitles && (
-                      <h1 className="format-preview-page__title format-preview-page__title--on-band">{chapter.title}</h1>
+                      <h1
+                        className="format-preview-page__title format-preview-page__title--on-band"
+                        style={options.backgroundImageTextColor === "light" ? { color: "#fff" } : undefined}
+                      >
+                        {chapter.title}
+                      </h1>
                     )}
                   </div>
                 ) : (

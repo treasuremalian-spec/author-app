@@ -152,6 +152,18 @@ export interface PrintOptions {
    * request; the EPUB export never reads PrintBookInput.backgroundImage
    * at all. */
   backgroundImageMode?: "none" | "every_page" | "chapter_start";
+  /** Text color on the page(s) the background image paints behind --
+   * "dark" (default, the book's normal near-black body text) or "light"
+   * (white). Has no effect when backgroundImageMode is "none" or no
+   * background image was uploaded. Author request, 2026-09-08: rather
+   * than this file automatically dimming/washing every background photo
+   * to guarantee legibility (the 2026-09-08 fix's original approach --
+   * see the removed wash-layer comment in git history), the author picks
+   * the text color themselves to match whatever photo they uploaded, the
+   * same way a real designer would choose "light text" for a dark cover
+   * image and "dark text" for a light one, and gets the photo at its own
+   * true strength either way -- no automatic dimming. */
+  backgroundImageTextColor?: "dark" | "light";
 }
 
 const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
@@ -162,6 +174,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   chapterStartsOnRight: false,
   showChapterTitles: true,
   backgroundImageMode: "none",
+  backgroundImageTextColor: "dark",
 };
 
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
@@ -340,7 +353,7 @@ function buildCss(
   const { widthIn, heightIn } = resolvePageDimensions(trimSize, bleedActive);
   const width = `${widthIn}in`;
   const height = `${heightIn}in`;
-  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight, backgroundImageMode } = options;
+  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight, backgroundImageMode, backgroundImageTextColor } = options;
   const bleed = bleedActive ? BLEED_IN : 0;
 
   // Base margins (top/right/bottom/left), used as-is when mirroredMargins
@@ -499,31 +512,18 @@ ${
    cheap insurance against a future pagedjs upgrade changing its own
    injected stylesheet's rule order.
 
-   A near-opaque white "wash" layer (2026-09-08 fix, author-reported: her
-   real book cover -- a dark, high-contrast photo with a big metallic
-   logo baked into it -- used as this background made the actual chapter
-   text on top of it unreadable) sits ABOVE the photo in the same
-   background-image stack (multiple comma-separated background layers
-   paint first-listed-on-top, same as any other CSS background-image
-   list) rather than the raw photo alone. This is the standard "watermark
-   art behind body text" recipe real book-design tools use -- most
-   uploaded photos are busy enough to fight with 11.5pt serif text
-   otherwise, and there's no way to know in advance whether an author's
-   photo will be dark, light, or full of its own text/logos, so this
-   needs to hold up against ALL of those, not just a plain/subtle image.
-   Confirmed via a real local Paged.js render against a deliberately
-   adversarial test image (hard black/white checkerboard quadrants PLUS
-   overlaid white logo-style text, worse contrast than a typical photo)
-   -- with this wash layer, real chapter body text sampled a comfortable
-   WCAG AA+ contrast ratio against the composited background everywhere
-   tested; without it, contrast collapsed to unreadable over the image's
-   own dark/bright regions, reproducing exactly what was seen in the
-   author's real exported PDF. */
+   No automatic dimming/wash on the photo itself (an earlier 2026-09-08
+   fix did this -- a near-opaque white layer -- after an author's dark,
+   busy cover photo made real chapter text unreadable on top of it; she
+   asked, reasonably, for a manual light/dark TEXT choice instead of
+   always dimming her image, so the photo now always renders at its own
+   true strength and backgroundImageTextColor below picks a legible text
+   color to go with it instead). */
 .pagedjs_page {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${backgroundImageDataUri}) !important;
-  background-size: 100% 100%, cover !important;
-  background-position: center, center !important;
-  background-repeat: no-repeat, no-repeat !important;
+  background-image: url(${backgroundImageDataUri}) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
 }
 `
     : ""
@@ -537,14 +537,45 @@ ${
    mechanism for "the first page of this chapter." Verified 2026-09-07
    the same way as "every_page" above -- pixel-sampled a real paginated,
    multi-chapter render and confirmed the background shows on exactly the
-   two .pagedjs_page_chapter_start pages and nowhere else. Same white
-   wash layer as "every_page" above, and for the same reason -- see that
-   comment for the full explanation and how it was verified. */
+   two .pagedjs_page_chapter_start pages and nowhere else. No automatic
+   wash here either, for the same reason as "every_page" above. */
 .pagedjs_page_chapter_start {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${backgroundImageDataUri}) !important;
-  background-size: 100% 100%, cover !important;
-  background-position: center, center !important;
-  background-repeat: no-repeat, no-repeat !important;
+  background-image: url(${backgroundImageDataUri}) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+`
+    : ""
+}
+${
+  backgroundImageDataUri && backgroundImageMode === "every_page" && backgroundImageTextColor === "light"
+    ? `/* White text for a dark background photo (author request,
+   2026-09-08, replacing the earlier automatic wash -- see the comment
+   above). The universal descendant selector (rather than trying to
+   individually re-color .chapter-title/.chapter-first-paragraph/figcaption/
+   etc.) deliberately overrides EVERY text color on this page, including
+   ones a more specific rule elsewhere in this file would otherwise win
+   against a plain ".pagedjs_page { color: ... }" (e.g. .manuscript-image-
+   figure--caption figcaption's own explicit color) -- this is also how
+   the running header/page-number margin boxes get repainted white, since
+   Paged.js renders those as real descendant DOM nodes of this same page
+   box (confirmed by the pre-existing ".pagedjs_page_chapter_start
+   .pagedjs_margin-top-center" visibility rule above, which relies on the
+   exact same DOM relationship). */
+.pagedjs_page, .pagedjs_page * {
+  color: #fff !important;
+}
+`
+    : ""
+}
+${
+  backgroundImageDataUri && backgroundImageMode === "chapter_start" && backgroundImageTextColor === "light"
+    ? `/* White text for a dark chapter-start background photo -- same
+   mechanism and reasoning as "every_page" above, scoped to just the
+   chapter-opening page box. */
+.pagedjs_page_chapter_start, .pagedjs_page_chapter_start * {
+  color: #fff !important;
 }
 `
     : ""
@@ -856,6 +887,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
     showChapterTitles: options.showChapterTitles ?? DEFAULT_PRINT_OPTIONS.showChapterTitles,
     backgroundImageMode: options.backgroundImageMode ?? DEFAULT_PRINT_OPTIONS.backgroundImageMode,
+    backgroundImageTextColor: options.backgroundImageTextColor ?? DEFAULT_PRINT_OPTIONS.backgroundImageTextColor,
   };
 
   const bleedActive = bookHasSpreadImage(book.sections);

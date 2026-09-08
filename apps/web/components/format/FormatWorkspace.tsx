@@ -36,6 +36,15 @@ interface PrintOptionsState {
    * will only show up in PDF files not the epub") -- never sent to the
    * EPUB download link. */
   backgroundImageMode: "none" | "every_page" | "chapter_start";
+  /** Whether text overlaid on the background image renders dark (default,
+   * normal manuscript-text color) or light/white. Author-chosen per
+   * request 2026-09-08 ("instead of lighten the background make an
+   * option to have text black or white") -- replaces an earlier
+   * automatic semi-opaque white wash behind the photo, which the author
+   * didn't want (she'd rather the photo show at full strength and pick
+   * the text color herself). Only meaningful when backgroundImageMode
+   * isn't "none". */
+  backgroundImageTextColor: "dark" | "light";
 }
 
 const DEFAULT_OPTIONS: PrintOptionsState = {
@@ -46,6 +55,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   showChapterTitles: true,
   lineSpacing: "1.5",
   backgroundImageMode: "none",
+  backgroundImageTextColor: "dark",
 };
 
 function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
@@ -58,6 +68,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     showChapterTitles: options.showChapterTitles ? "1" : "0",
     lineSpacing: options.lineSpacing,
     backgroundImageMode: options.backgroundImageMode,
+    backgroundImageTextColor: options.backgroundImageTextColor,
   });
   return `/projects/${projectId}/export/pdf?${params.toString()}`;
 }
@@ -79,7 +90,7 @@ export function FormatWorkspace({
   const preview = initialPreview;
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(preview.backgroundImageUrl);
 
-  function toggle(key: keyof Omit<PrintOptionsState, "lineSpacing" | "backgroundImageMode">) {
+  function toggle(key: keyof Omit<PrintOptionsState, "lineSpacing" | "backgroundImageMode" | "backgroundImageTextColor">) {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
@@ -201,6 +212,27 @@ export function FormatWorkspace({
                       </select>
                     </div>
                   )}
+                  {backgroundImageUrl && options.backgroundImageMode !== "none" && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Label htmlFor="background-image-text-color" className="text-sm font-normal text-foreground">
+                        Text color over the image
+                      </Label>
+                      <select
+                        id="background-image-text-color"
+                        className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                        value={options.backgroundImageTextColor}
+                        onChange={(event) =>
+                          setOptions((prev) => ({
+                            ...prev,
+                            backgroundImageTextColor: event.target.value as PrintOptionsState["backgroundImageTextColor"],
+                          }))
+                        }
+                      >
+                        <option value="dark">Dark (normal)</option>
+                        <option value="light">Light / white</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
@@ -292,6 +324,7 @@ export function FormatWorkspace({
             showChapterTitles: options.showChapterTitles,
             backgroundImageUrl,
             backgroundImageMode: options.backgroundImageMode,
+            backgroundImageTextColor: options.backgroundImageTextColor,
           }}
         />
       </div>
