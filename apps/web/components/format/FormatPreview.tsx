@@ -93,7 +93,13 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     overflowX: "hidden",
     ...(showEveryPageBackground
       ? {
-          backgroundImage: `url(${options.backgroundImageUrl})`,
+          // Same white "wash" layered on top of the photo as the real PDF
+          // pipeline uses (print-html.ts, fixed 2026-09-08 -- a busy/dark
+          // photo painted at full strength made real body text on top of
+          // it unreadable), so the preview doesn't mislead an author into
+          // thinking their photo will show up bold and undimmed in the
+          // actual export.
+          backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${options.backgroundImageUrl})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
@@ -125,7 +131,15 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                     className="format-preview-page__chapter-start-band"
                     style={{
                       aspectRatio: `${widthIn} / ${heightIn}`,
-                      backgroundImage: `url(${options.backgroundImageUrl})`,
+                      // Same white "wash" the real PDF pipeline paints
+                      // over a chapter-start background photo (fixed
+                      // 2026-09-08 -- an unwashed photo made real chapter
+                      // text unreadable on top of it) -- normal dark
+                      // title/body text sits on this band now, matching
+                      // what the actual export renders, not a separate
+                      // white-on-dark "hero image" look this preview used
+                      // to invent on its own.
+                      backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${options.backgroundImageUrl})`,
                     }}
                   >
                     {options.showChapterTitles && (
@@ -185,16 +199,8 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           justify-content: center;
           overflow: hidden;
         }
-        .format-preview-page__chapter-start-band::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.55) 100%);
-        }
         .format-preview-page__title--on-band {
           position: relative;
-          color: #fff;
-          text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
           margin: 0 0 0.9em;
         }
         .format-preview-page__body p {

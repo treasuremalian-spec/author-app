@@ -497,12 +497,33 @@ ${
    pagedjs version -- a side-by-side run with !important stripped from
    just these four declarations still won -- but it's kept anyway as
    cheap insurance against a future pagedjs upgrade changing its own
-   injected stylesheet's rule order. */
+   injected stylesheet's rule order.
+
+   A near-opaque white "wash" layer (2026-09-08 fix, author-reported: her
+   real book cover -- a dark, high-contrast photo with a big metallic
+   logo baked into it -- used as this background made the actual chapter
+   text on top of it unreadable) sits ABOVE the photo in the same
+   background-image stack (multiple comma-separated background layers
+   paint first-listed-on-top, same as any other CSS background-image
+   list) rather than the raw photo alone. This is the standard "watermark
+   art behind body text" recipe real book-design tools use -- most
+   uploaded photos are busy enough to fight with 11.5pt serif text
+   otherwise, and there's no way to know in advance whether an author's
+   photo will be dark, light, or full of its own text/logos, so this
+   needs to hold up against ALL of those, not just a plain/subtle image.
+   Confirmed via a real local Paged.js render against a deliberately
+   adversarial test image (hard black/white checkerboard quadrants PLUS
+   overlaid white logo-style text, worse contrast than a typical photo)
+   -- with this wash layer, real chapter body text sampled a comfortable
+   WCAG AA+ contrast ratio against the composited background everywhere
+   tested; without it, contrast collapsed to unreadable over the image's
+   own dark/bright regions, reproducing exactly what was seen in the
+   author's real exported PDF. */
 .pagedjs_page {
-  background-image: url(${backgroundImageDataUri}) !important;
-  background-size: cover !important;
-  background-position: center !important;
-  background-repeat: no-repeat !important;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${backgroundImageDataUri}) !important;
+  background-size: 100% 100%, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
 }
 `
     : ""
@@ -516,12 +537,14 @@ ${
    mechanism for "the first page of this chapter." Verified 2026-09-07
    the same way as "every_page" above -- pixel-sampled a real paginated,
    multi-chapter render and confirmed the background shows on exactly the
-   two .pagedjs_page_chapter_start pages and nowhere else. */
+   two .pagedjs_page_chapter_start pages and nowhere else. Same white
+   wash layer as "every_page" above, and for the same reason -- see that
+   comment for the full explanation and how it was verified. */
 .pagedjs_page_chapter_start {
-  background-image: url(${backgroundImageDataUri}) !important;
-  background-size: cover !important;
-  background-position: center !important;
-  background-repeat: no-repeat !important;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)), url(${backgroundImageDataUri}) !important;
+  background-size: 100% 100%, cover !important;
+  background-position: center, center !important;
+  background-repeat: no-repeat, no-repeat !important;
 }
 `
     : ""
