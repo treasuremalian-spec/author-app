@@ -230,6 +230,13 @@ body {
 .manuscript-image-node--spread .manuscript-image-node__img {
   max-width: 90%;
 }
+/* "spread-double" (2026-09-08) -- a two-facing-page print spread has no
+   equivalent in this single continuous editor column, so it previews
+   exactly like "spread": one full image, same size. See the long comment
+   in manuscript-image.ts for why. */
+.manuscript-image-node--spread-double .manuscript-image-node__img {
+  max-width: 90%;
+}
 .manuscript-image-node--caption .manuscript-image-node__img {
   max-width: 60%;
 }

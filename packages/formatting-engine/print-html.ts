@@ -407,6 +407,51 @@ function buildCss(
 }
 `;
 
+  // Same bleed-escape math as spreadBleedCss above, but for a
+  // "spread-double" image's two halves (see the ".manuscript-image-figure
+  // --spread-double-left/-right" rules further down). Unlike a plain
+  // "spread" image -- which can land on either a left or right page
+  // depending on where it falls in the flow, hence spreadBleedCss keying
+  // off Paged.js's own pagedjs_left_page/pagedjs_right_page classes --
+  // these two classes are each DETERMINISTICALLY pinned to one page side
+  // by their own break-before rule (left half always verso, right half
+  // always the recto immediately after), so the same left/right margin
+  // math can be written directly against the class name, no page-side
+  // selector needed.
+  //
+  // HEIGHT is the true physical bled page height (${height}) directly,
+  // NOT "calc(100% + ...)" the way spreadBleedCss's WIDTH math (still
+  // used below) and the single-image --spread rule both do -- confirmed
+  // by a real Paged.js render (2026-09-08) that percentage HEIGHT here
+  // resolves to 0, not the page's content height: this figure's own
+  // ancestor chain (the flowing chapter content) has no definite CSS
+  // height anywhere above it, only WIDTH is definite that way in normal
+  // block flow, and single-image --spread only gets away with height:
+  // calc(100% + ...) because its <img> stays in normal (non-absolute)
+  // flow, where a percentage-height replaced element with no definite
+  // container instead falls back to its own intrinsic aspect ratio,
+  // "accidentally" giving the flex figure something real to shrink-wrap
+  // around. This figure's <img> is deliberately position: absolute (the
+  // "sliding window" split -- see the class rules below), which takes it
+  // OUT of flow entirely, so that fallback never fires and the figure's
+  // indefinite percentage height collapses to a real, measured 0 instead
+  // -- caught by pixel-sampling a real render showing both halves with
+  // zero rendered height. Setting an outright absolute height sidesteps
+  // the percentage-resolution question entirely, which is more robust
+  // here regardless.
+  const spreadDoubleBleedCss = `
+.manuscript-image-figure--spread-double-left {
+  margin: -${marginTopIn}in -${rightInside}in -${marginBottomIn}in -${rightOutside}in;
+  width: calc(100% + ${rightOutside + rightInside}in);
+  height: ${height};
+}
+.manuscript-image-figure--spread-double-right {
+  margin: -${marginTopIn}in -${rightOutside}in -${marginBottomIn}in -${rightInside}in;
+  width: calc(100% + ${rightOutside + rightInside}in);
+  height: ${height};
+}
+`;
+
   return `
 /* Embedded print font (Crimson Pro, SIL Open Font License) -- see
    fonts-embedded.ts for why this is embedded as font data rather than
@@ -659,30 +704,39 @@ p {
 }
 /* Inline manuscript images (see tiptap-to-xhtml.ts's "manuscriptImage"
    case and apps/web/components/manuscript/extensions/manuscript-image.ts)
-   -- three display modes a writer picks per image:
-     "header"  -- a modest, centered image (e.g. under a chapter title).
-                  No forced break; it sits wherever the writer placed it.
-     "spread"  -- a full dedicated page. break-before/after: page is the
-                  same mechanism .titlepage/.part-divider already use
-                  above. Bleeds all the way to the true physical page edge
-                  (past the trim line, into real print bleed, when this
-                  book has any spread image -- see BLEED_IN and
-                  spreadBleedCss above for the mechanics and how this was
-                  verified against a real render before shipping).
-     "caption" -- the default: an inline photo, modestly sized, with an
-                  optional <figcaption> underneath in small italic type
-                  (classic photo-insert style).
+   -- four display modes a writer picks per image:
+     "header"        -- a modest, centered image (e.g. under a chapter
+                         title). No forced break; sits wherever placed.
+     "spread"        -- a full dedicated page. break-before/after: page is
+                         the same mechanism .titlepage/.part-divider
+                         already use above. Bleeds all the way to the true
+                         physical page edge (past the trim line, into real
+                         print bleed, when this book has any spread image
+                         -- see BLEED_IN and spreadBleedCss above for the
+                         mechanics and how this was verified against a
+                         real render before shipping).
+     "spread-double" -- (2026-09-08, author-requested) ONE photo split
+                         across two FACING pages instead of filling one --
+                         see the ".manuscript-image-figure--spread-double-
+                         left/-right" rules and spreadDoubleBleedCss below
+                         for the full mechanics.
+     "caption"       -- the default: an inline photo, modestly sized, with
+                         an optional <figcaption> underneath in small
+                         italic type (classic photo-insert style).
    "align"/an explicit width (writer-controlled per image, see
    manuscript-image-view.tsx) are applied as inline styles directly on the
    <figure>/<img> by tiptap-to-xhtml.ts, which naturally override the
    class-based defaults below -- these rules are just each mode's default
-   look when the writer hasn't overridden it.
+   look when the writer hasn't overridden it (moot for "spread"/
+   "spread-double", which never receive those inline styles in the first
+   place -- see the "manuscriptImage" case in tiptap-to-xhtml.ts).
    object-fit: contain (not cover) on every mode so an odd aspect ratio
    never crops part of the writer's photo away without them asking for
-   that (the one exception is the spread bleed rule above, which
-   deliberately uses cover-style stretching to fill the bled page edge to
-   edge -- see the "manuscript-image" rule inside .manuscript-image-figure
-   --spread below). */
+   that (the exceptions are the spread and spread-double bleed rules
+   below, which both deliberately use cover-style stretching to fill
+   their bled page edge(s) to edge -- see the "manuscript-image" rules
+   inside .manuscript-image-figure--spread and --spread-double-left/
+   -right). */
 .manuscript-image-figure {
   margin: 1em 0;
   text-align: center;
@@ -736,6 +790,69 @@ p {
   object-fit: cover;
 }
 ${spreadBleedCss}
+/* "spread-double" -- one photo split across two facing pages (see the
+   long mode comment above). Mechanics:
+   1. tiptap-to-xhtml.ts emits TWO <figure class="...--spread-double-
+      left/-right"> from the one manuscriptImage node, each with its own
+      full copy of the SAME <img>.
+   2. Left lands on a verso (left-hand) page and right on the recto
+      immediately after it via break-before below -- "verso"/"recto" are
+      the same CSS Fragmentation values already relied on for
+      chapterStartsOnRight above, guaranteeing the pairing regardless of
+      whether the left half happens to land on an even or odd page number
+      in the document flow.
+   3. Each figure bleeds to its own physical page edge exactly like a
+      plain "spread" image does (spreadDoubleBleedCss above -- same
+      negative-margin escape, just keyed directly off these two
+      deterministic classes instead of Paged.js's page-side classes).
+   4. The "sliding window": each figure's <img> is sized to 200% of the
+      figure's own (already bled-to-full-page) width and 100% of its
+      height -- i.e. a virtual canvas exactly as wide as BOTH bled pages
+      side by side -- with object-fit: cover scaling/cropping the source
+      photo to fill that virtual double-wide canvas, then shifted
+      horizontally by -100% of the figure's width for the right half so
+      only the image's right half shows (0 shift, i.e. its natural
+      position, for the left half). Because both figures use IDENTICAL
+      sizing math against the same source image, the two halves line up
+      into one continuous image when the printed book is opened flat --
+      the reader never sees the img itself "jump," only the physical page
+      edge in the middle. Verify any future change here against a real
+      Paged.js render (see this file's other bleed/pagination features
+      for the verification standard) -- this is pure CSS geometry with no
+      unit test to catch an off-by-one percentage. */
+.manuscript-image-figure--spread-double-left,
+.manuscript-image-figure--spread-double-right {
+  break-after: page;
+  margin: 0;
+  /* Real height set below by spreadDoubleBleedCss (a plain "height: 100%"
+     here doesn't resolve to anything useful -- see the long comment on
+     spreadDoubleBleedCss above for why). */
+  overflow: hidden;
+  position: relative;
+}
+.manuscript-image-figure--spread-double-left {
+  break-before: verso;
+}
+.manuscript-image-figure--spread-double-right {
+  break-before: recto;
+}
+.manuscript-image-figure--spread-double-left .manuscript-image,
+.manuscript-image-figure--spread-double-right .manuscript-image {
+  position: absolute;
+  top: 0;
+  width: 200%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+}
+.manuscript-image-figure--spread-double-left .manuscript-image {
+  left: 0;
+}
+.manuscript-image-figure--spread-double-right .manuscript-image {
+  left: -100%;
+}
+${spreadDoubleBleedCss}
 .manuscript-image-figure--caption .manuscript-image {
   max-width: 62%;
 }
@@ -915,6 +1032,12 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
       if (!asset) return null;
       return `data:${asset.mimeType};base64,${Buffer.from(asset.bytes).toString("base64")}`;
     },
+    // This is the one pipeline with real facing left/right pages (see
+    // RenderContext.supportsFacingPages) -- lets a "spread-double"
+    // manuscriptImage node render as an actual two-page split instead of
+    // tiptap-to-xhtml.ts's single-image fallback (what EPUB and the live
+    // preview both get).
+    supportsFacingPages: true,
   };
 
   let chapterNumber = 1;

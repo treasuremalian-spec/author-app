@@ -6,12 +6,19 @@
 // Toolbar.tsx and the "manuscript-images" Storage bucket in
 // supabase/migrations/). Vellum-parity feature request, 2026-09-06.
 //
-// One node with a "displayMode" attribute rather than three separate node
-// types -- "header" (a modest, centered image, styled to sit under a
-// chapter title), "spread" (a full dedicated page in print/EPUB), or
-// "caption" (an inline photo with an optional caption, the default) --
-// since a writer changing their mind about how an already-placed image
-// should read is just an attribute change, not a delete-and-reinsert.
+// One node with a "displayMode" attribute rather than separate node types
+// -- "header" (a modest, centered image, styled to sit under a chapter
+// title), "spread" (a full dedicated page in print/EPUB), "spread-double"
+// (2026-09-08, author-requested "double-page spread": ONE photo split
+// across two facing print pages, left half on the verso/left-hand page
+// and right half on the immediately following recto/right-hand page --
+// print-PDF-only, since a reflowable EPUB and this editor's own
+// continuous-scroll preview have no concept of facing pages; both fall
+// back to rendering it as a single full "spread" image instead, see the
+// "manuscriptImage" case in tiptap-to-xhtml.ts), or "caption" (an inline
+// photo with an optional caption, the default) -- since a writer changing
+// their mind about how an already-placed image should read is just an
+// attribute change, not a delete-and-reinsert.
 //
 // "align" and "widthPercent" (added 2026-09-07, per author request) let a
 // writer center/left/right an image and shrink it from its display mode's
@@ -37,7 +44,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { ManuscriptImageView } from "./manuscript-image-view";
 
-export type ManuscriptImageDisplayMode = "header" | "spread" | "caption";
+export type ManuscriptImageDisplayMode = "header" | "spread" | "spread-double" | "caption";
 export type ManuscriptImageAlign = "left" | "center" | "right";
 
 export interface ManuscriptImageAttrs {

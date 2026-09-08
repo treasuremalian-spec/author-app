@@ -12,7 +12,7 @@
 
 import type { NodeViewProps } from "@tiptap/react";
 import { NodeViewWrapper } from "@tiptap/react";
-import { Rows, GalleryVertical, Newspaper, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { Rows, GalleryVertical, BookOpen, Newspaper, Trash2, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { ManuscriptImageAlign, ManuscriptImageDisplayMode } from "./manuscript-image";
@@ -21,6 +21,11 @@ import { MANUSCRIPT_IMAGE_WIDTH_PRESETS } from "./manuscript-image";
 const MODE_OPTIONS: { mode: ManuscriptImageDisplayMode; label: string; icon: typeof Rows }[] = [
   { mode: "header", label: "Header", icon: Rows },
   { mode: "spread", label: "Full-page spread", icon: GalleryVertical },
+  // "Double-page spread" (2026-09-08): one photo split across two facing
+  // print pages -- print-PDF-only (see the long comment in
+  // manuscript-image.ts), so this shows in the editor and preview as a
+  // single full image, same as "spread", the way it also renders in EPUB.
+  { mode: "spread-double", label: "Double-page spread", icon: BookOpen },
   { mode: "caption", label: "Photo + caption", icon: Newspaper },
 ];
 
@@ -32,12 +37,16 @@ const ALIGN_OPTIONS: { align: ManuscriptImageAlign; label: string; icon: typeof 
 
 export function ManuscriptImageView({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
   const displayMode: ManuscriptImageDisplayMode =
-    node.attrs.displayMode === "header" || node.attrs.displayMode === "spread" ? node.attrs.displayMode : "caption";
+    node.attrs.displayMode === "header" || node.attrs.displayMode === "spread" || node.attrs.displayMode === "spread-double"
+      ? node.attrs.displayMode
+      : "caption";
   const caption: string = typeof node.attrs.caption === "string" ? node.attrs.caption : "";
   const align: ManuscriptImageAlign =
     node.attrs.align === "left" || node.attrs.align === "right" ? node.attrs.align : "center";
   const widthPercent: number | null = typeof node.attrs.widthPercent === "number" ? node.attrs.widthPercent : null;
-  const showSizingControls = displayMode !== "spread";
+  // A "spread-double" image fills two whole pages by definition, exactly
+  // like "spread" fills one -- alignment/sizing don't apply to either.
+  const showSizingControls = displayMode !== "spread" && displayMode !== "spread-double";
 
   return (
     <NodeViewWrapper

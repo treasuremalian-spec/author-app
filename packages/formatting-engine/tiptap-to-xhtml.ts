@@ -25,6 +25,15 @@ export interface DocNode {
  * fail soft, same as the existing cover-image loading in export-data.ts. */
 export interface RenderContext {
   resolveImage?: (src: string) => string | null | undefined;
+  /** True only for the real print-PDF pipeline (print-html.ts) -- the one
+   * export/preview surface with actual facing left/right pages. Governs
+   * whether a "spread-double" manuscriptImage node (see the
+   * "manuscriptImage" case below) renders as its real two-page split or
+   * falls back to a single full "spread" image, which is all a
+   * reflowable EPUB or this app's own continuous-scroll live preview can
+   * show. Unset (the default, EPUB/preview's ctx) means "no facing
+   * pages." */
+  supportsFacingPages?: boolean;
 }
 
 export function escapeXml(input: string): string {
@@ -146,11 +155,14 @@ function renderBlock(node: DocNode, ctx?: RenderContext): string {
     case "manuscriptImage": {
       // A writer-inserted inline image (see
       // apps/web/components/manuscript/extensions/manuscript-image.ts),
-      // one of three display modes the writer picks per image: "header"
+      // one of four display modes the writer picks per image: "header"
       // (a modest centered image, styled to sit under a chapter title),
       // "spread" (a full dedicated page, print-html.ts forces a break
       // before/after it and (2026-09-07) makes it bleed all the way to the
-      // physical page edge -- see the bleed note in print-html.ts), or
+      // physical page edge -- see the bleed note in print-html.ts),
+      // "spread-double" (2026-09-08, print-only: ONE photo split across
+      // two facing pages -- see the dedicated branch below and the long
+      // comment in print-html.ts's buildCss for the mechanics), or
       // "caption" (an inline photo with an optional caption line -- the
       // default). ctx.resolveImage turns the node's stored Supabase
       // Storage URL into whatever each export pipeline actually needs to
@@ -177,11 +189,44 @@ function renderBlock(node: DocNode, ctx?: RenderContext): string {
       // ".manuscript-image-figure--<mode>" class rules, which an inline
       // style here naturally overrides.
       const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
-      const mode = node.attrs?.displayMode === "header" || node.attrs?.displayMode === "spread" ? node.attrs.displayMode : "caption";
+      const mode =
+        node.attrs?.displayMode === "header" ||
+        node.attrs?.displayMode === "spread" ||
+        node.attrs?.displayMode === "spread-double"
+          ? node.attrs.displayMode
+          : "caption";
       const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
       const captionText = typeof node.attrs?.caption === "string" ? node.attrs.caption.trim() : "";
       const resolvedSrc = src && ctx?.resolveImage ? ctx.resolveImage(src) : null;
       if (!resolvedSrc) return "";
+
+      if (mode === "spread-double") {
+        // A true double-page spread (one photo split across two FACING
+        // print pages) only means something where facing pages actually
+        // exist -- see RenderContext.supportsFacingPages above. Without
+        // that (EPUB, and this app's own continuous-scroll live preview),
+        // fall back to exactly the same single full-page figure "spread"
+        // mode already renders, rather than a broken half-image or a
+        // silently-dropped one.
+        if (!ctx?.supportsFacingPages) {
+          const imgHtml = `<img class="manuscript-image" src="${escapeXml(resolvedSrc)}" alt="${escapeXml(alt)}"/>`;
+          return `<figure class="manuscript-image-figure manuscript-image-figure--spread">${imgHtml}</figure>`;
+        }
+        // Two separate <figure> elements from this one node -- the LEFT
+        // half is forced onto a verso (left-hand) page and the RIGHT half
+        // immediately follows on the next (necessarily recto/right-hand)
+        // page, via break-before rules in print-html.ts's buildCss (see
+        // ".manuscript-image-figure--spread-double-left/-right" there).
+        // Both render the SAME image, sized and positioned by that same
+        // CSS to show only their half of it -- see the long comment there
+        // for the "virtual double-wide page" sizing technique.
+        const halfImg = (side: "left" | "right") =>
+          `<img class="manuscript-image manuscript-image--half-${side}" src="${escapeXml(resolvedSrc)}" alt="${escapeXml(alt)}"/>`;
+        return (
+          `<figure class="manuscript-image-figure manuscript-image-figure--spread-double-left">${halfImg("left")}</figure>` +
+          `<figure class="manuscript-image-figure manuscript-image-figure--spread-double-right">${halfImg("right")}</figure>`
+        );
+      }
 
       const align = node.attrs?.align === "left" || node.attrs?.align === "right" ? node.attrs.align : "center";
       const widthPercentRaw = Number(node.attrs?.widthPercent);
@@ -239,7 +284,15 @@ export function docHasSpreadImage(doc: unknown): boolean {
   const root = doc as DocNode | null | undefined;
   if (!root || !Array.isArray(root.content)) return false;
   const walk = (node: DocNode): boolean => {
-    if (node.type === "manuscriptImage" && node.attrs?.displayMode === "spread") return true;
+    // "spread-double" needs the same real print bleed a single-page
+    // "spread" does (see BLEED_IN in print-html.ts) -- both bleed image
+    // content to the true physical page edge, "spread-double" on two
+    // pages instead of one.
+    if (
+      node.type === "manuscriptImage" &&
+      (node.attrs?.displayMode === "spread" || node.attrs?.displayMode === "spread-double")
+    )
+      return true;
     return (node.content ?? []).some(walk);
   };
   return root.content.some(walk);
