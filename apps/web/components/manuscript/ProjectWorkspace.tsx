@@ -4,8 +4,9 @@ import { useState } from "react";
 import { PenLine } from "lucide-react";
 
 import { Binder } from "./Binder";
-import { SceneEditor } from "./SceneEditor";
+import { SceneEditor, type PendingEditorAction } from "./SceneEditor";
 import { SceneInspector } from "./SceneInspector";
+import type { SearchMatch } from "@/lib/manuscript-search";
 import {
   buildTree,
   bookWordCount,
@@ -47,6 +48,12 @@ export function ProjectWorkspace({
   initialSelectedNodeId,
 }: ProjectWorkspaceProps) {
   const [nodes, setNodes] = useState<ManuscriptNodeData[]>(initialNodes);
+  // Book-wide search (2026-09-11) -- a match's jump/replace can target a
+  // DIFFERENT chapter than whatever's currently open, so this is a
+  // pending instruction for the editor to carry out once it (re)mounts
+  // on that chapter, not something applied directly here (only the live,
+  // mounted Tiptap editor instance can actually move its own selection).
+  const [pendingAction, setPendingAction] = useState<PendingEditorAction | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => {
     const lastEdited = initialSelectedNodeId
       ? initialNodes.find((n) => n.id === initialSelectedNodeId && n.scene)
@@ -245,11 +252,26 @@ export function ProjectWorkspace({
     setRefreshToken((t) => t + 1);
   }
 
+  // Book-wide search (2026-09-11): jumping to a match switches to its
+  // chapter (a no-op if already there) and queues the selection/replace
+  // for the editor to actually carry out once it's mounted and ready --
+  // see SceneEditor.tsx's pendingAction effect.
+  function handleJumpToMatch(nodeId: string, match: SearchMatch) {
+    setSelectedNodeId(nodeId);
+    setPendingAction({ type: "select", nodeId, from: match.from, to: match.to, nonce: Date.now() });
+  }
+
+  function handleReplaceOne(nodeId: string, match: SearchMatch, replacement: string) {
+    setSelectedNodeId(nodeId);
+    setPendingAction({ type: "replace", nodeId, from: match.from, to: match.to, replacement, nonce: Date.now() });
+  }
+
   return (
     <div className="h-full">
       <div className="grid h-full min-h-0 grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr_280px]">
         <aside className="min-h-0 border-r border-border bg-secondary/25">
           <Binder
+            projectId={projectId}
             nodes={nodes}
             selectedNodeId={selectedNodeId}
             totalWords={totalWords}
@@ -266,6 +288,8 @@ export function ProjectWorkspace({
             onSetChapterAuthor={handleSetChapterAuthor}
             onSetShowHeadingOverride={handleSetShowHeadingOverride}
             onClearTitle={handleClearTitle}
+            onJumpToMatch={handleJumpToMatch}
+            onReplaceOne={handleReplaceOne}
           />
         </aside>
 
@@ -279,6 +303,8 @@ export function ProjectWorkspace({
               initialContent={selectedNode.scene.content}
               onWordCountChange={handleWordCountChange}
               onContentChange={handleContentChange}
+              pendingAction={pendingAction?.nodeId === selectedNode.id ? pendingAction : null}
+              onPendingActionHandled={() => setPendingAction(null)}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

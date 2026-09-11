@@ -25,6 +25,7 @@ import {
   GripVertical,
   MoreHorizontal,
   Plus,
+  Search,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ import {
   type PageType,
   type TreeNode,
 } from "@/lib/manuscript-tree";
+import type { SearchMatch } from "@/lib/manuscript-search";
+import { BookSearchPanel } from "./BookSearchPanel";
 
 export interface BinderHandlers {
   onSelect: (id: string) => void;
@@ -67,9 +70,16 @@ export interface BinderHandlers {
   onSetChapterAuthor: (id: string, chapterAuthor: string | null) => void;
   onSetShowHeadingOverride: (id: string, showHeadingOverride: boolean | null) => void;
   onClearTitle: (id: string) => void;
+  // Book-wide search (2026-09-11) -- see BookSearchPanel.tsx. Jumping to a
+  // match may select a DIFFERENT chapter than whatever's open right now;
+  // a single "Replace" click acts on whichever chapter that match is in,
+  // same reasoning.
+  onJumpToMatch: (nodeId: string, match: SearchMatch) => void;
+  onReplaceOne: (nodeId: string, match: SearchMatch, replacement: string) => void;
 }
 
 interface BinderProps extends BinderHandlers {
+  projectId: string;
   nodes: ManuscriptNodeData[];
   selectedNodeId: string | null;
   totalWords: number;
@@ -87,7 +97,8 @@ const ICON_COLOR: Record<NodeType, string> = {
   SCENE: "text-muted-foreground",
 };
 
-export function Binder({ nodes, selectedNodeId, totalWords, ...handlers }: BinderProps) {
+export function Binder({ projectId, nodes, selectedNodeId, totalWords, ...handlers }: BinderProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
   const tree = buildTree(nodes);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -124,25 +135,49 @@ export function Binder({ nodes, selectedNodeId, totalWords, ...handlers }: Binde
             {totalWords.toLocaleString()} words total
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
-            >
-              <Plus className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => handlers.onAddNode(null, "PART")}>
-              Add Part
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => handlers.onAddNode(null, "CHAPTER")}>
-              Add Chapter
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title="Search the book"
+            aria-label="Search the book"
+            onClick={() => setSearchOpen((v) => !v)}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground",
+              searchOpen && "bg-background text-foreground"
+            )}
+          >
+            <Search className="size-3.5" />
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform hover:scale-105"
+              >
+                <Plus className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => handlers.onAddNode(null, "PART")}>
+                Add Part
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handlers.onAddNode(null, "CHAPTER")}>
+                Add Chapter
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
+
+      {searchOpen && (
+        <BookSearchPanel
+          projectId={projectId}
+          nodes={nodes}
+          onClose={() => setSearchOpen(false)}
+          onJumpToMatch={handlers.onJumpToMatch}
+          onReplaceOne={handlers.onReplaceOne}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto px-2 py-2 border-t border-border/60">
         {tree.length === 0 ? (

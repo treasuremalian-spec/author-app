@@ -3,17 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import TextAlign from "@tiptap/extension-text-align";
-import Placeholder from "@tiptap/extension-placeholder";
-import Link from "@tiptap/extension-link";
 import { Maximize2, Minimize2 } from "lucide-react";
 
-import { PageBreak } from "./extensions/page-break";
-import { SceneBreak } from "./extensions/scene-break";
-import { TextMessage } from "./extensions/text-message";
-import { ManuscriptImage } from "./extensions/manuscript-image";
+import { EDITOR_EXTENSIONS } from "./extensions/editor-extensions";
 
 import { countWords, EMPTY_DOC } from "@/lib/wordcount";
 import { cn } from "@/lib/utils";
@@ -31,7 +23,21 @@ interface SceneEditorProps {
   initialContent: unknown;
   onWordCountChange: (sceneId: string, wordCount: number) => void;
   onContentChange: (sceneId: string, content: unknown) => void;
+  // Book-wide search (2026-09-11) -- a jump/replace queued by
+  // ProjectWorkspace for the chapter THIS editor instance is for, applied
+  // once (see the effect below), then cleared via onPendingActionHandled.
+  // Null/undefined on every other render -- no search interaction pending.
+  pendingAction?: PendingEditorAction | null;
+  onPendingActionHandled?: () => void;
 }
+
+// {from, to} are real ProseMirror document positions, computed by
+// manuscript-search.ts against this exact scene's content -- see that
+// module's comment for why those positions are trustworthy without this
+// editor needing to have been mounted at search time.
+export type PendingEditorAction =
+  | { type: "select"; nodeId: string; from: number; to: number; nonce: number }
+  | { type: "replace"; nodeId: string; from: number; to: number; replacement: string; nonce: number };
 
 type SaveResult =
   | { ok: true; wordCount: number }
@@ -69,6 +75,8 @@ export function SceneEditor({
   initialContent,
   onWordCountChange,
   onContentChange,
+  pendingAction,
+  onPendingActionHandled,
 }: SceneEditorProps) {
   const router = useRouter();
   const [status, setStatus] = useState<"saving" | "saved" | "error">("saved");
@@ -83,28 +91,10 @@ export function SceneEditor({
 
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit,
-        Underline,
-        TextAlign.configure({ types: ["heading", "paragraph", "textMessage"] }),
-        Placeholder.configure({ placeholder: "Start writing..." }),
-        // EPUB hyperlinks (backlog item 5, 2026-09-11) -- openOnClick:false
-        // so a click while WRITING places the cursor/selects text like any
-        // other mark instead of navigating away; the Toolbar's own Link
-        // button is how a link actually gets added/edited/removed (see
-        // Toolbar.tsx). autolink/linkOnPaste so a typed or pasted URL
-        // becomes a real link mark without needing the toolbar at all.
-        Link.configure({
-          openOnClick: false,
-          autolink: true,
-          linkOnPaste: true,
-          HTMLAttributes: { rel: "noopener noreferrer" },
-        }),
-        PageBreak,
-        SceneBreak,
-        TextMessage,
-        ManuscriptImage,
-      ],
+      // Shared with manuscript-search.ts's headless schema (see
+      // editor-extensions.ts) so a book-search match's position is always
+      // computed against the exact same schema this live editor uses.
+      extensions: EDITOR_EXTENSIONS,
       content: (initialContent as object) ?? EMPTY_DOC,
       immediatelyRender: false,
       editorProps: {
@@ -189,6 +179,35 @@ export function SceneEditor({
       }
     };
   }, [sceneId, projectId]);
+
+  useEffect(() => {
+    // Applies a jump-to-match or single replace once BOTH the target
+    // scene's editor is mounted (pendingAction.nodeId === this sceneId,
+    // enforced by the parent) and `editor` itself is ready -- mirrors the
+    // pre-existing refreshToken-remount trick used for version-restore:
+    // useEditor's returned `editor` naturally transitions null -> ready,
+    // re-triggering this effect, so it works correctly even when clicking
+    // a search result switches which chapter is open (a fresh mount).
+    if (!editor || !pendingAction) return;
+    if (pendingAction.type === "select") {
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: pendingAction.from, to: pendingAction.to })
+        .scrollIntoView()
+        .run();
+    } else if (pendingAction.type === "replace") {
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: pendingAction.from, to: pendingAction.to })
+        .deleteSelection()
+        .insertContent(pendingAction.replacement)
+        .scrollIntoView()
+        .run();
+    }
+    onPendingActionHandled?.();
+  }, [pendingAction, editor]);
 
   if (!editor) return null;
 
