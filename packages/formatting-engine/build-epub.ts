@@ -6,7 +6,7 @@
 
 import JSZip from "jszip";
 import { sceneContentToXhtml, isSceneContentEmpty, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
-import { chapterHeadingLabel, PAGE_TYPE_LABELS, type PageType } from "./page-types";
+import { chapterHeadingLabel, PAGE_TYPE_IN_TOC, PAGE_TYPE_LABELS, type PageType } from "./page-types";
 
 export interface EpubScene {
   id: string;
@@ -79,6 +79,27 @@ interface NavEntry {
   isPart: boolean;
 }
 
+// A part/chapter, numbered and filed ahead of time -- lets the Contents
+// page (which must be written into the spine BEFORE any chapter content)
+// know every chapter's real filename and heading without a fragile
+// "guess what addChapter will generate" scheme. See resolveSections().
+interface ResolvedSection {
+  kind: "part" | "chapter";
+  id: string;
+  filename: string;
+  title: string;
+  chapterNumber: number; // 0 for a part
+  pageType?: PageType; // chapter only
+  chapter?: EpubChapter;
+  part?: EpubPart;
+}
+
+interface TocGroup {
+  partTitle: string | null; // null = chapters that aren't under any Part
+  partHref: string | null;
+  chapters: { href: string; title: string }[];
+}
+
 const XHTML_HEAD = (title: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
@@ -145,6 +166,115 @@ const EPUB_TYPE_BY_PAGE_TYPE: Partial<Record<PageType, string>> = {
   BIBLIOGRAPHY: "bibliography",
   ACKNOWLEDGMENTS: "acknowledgments",
 };
+
+// The ONE place that assigns every part/chapter its filename and chapter
+// number, in reading order -- used both to build the Contents page (which
+// must exist in the spine before any chapter content is written) and by
+// the real build loop below, so the two can never disagree on what a
+// chapter is called or numbered. Chapter filenames are a dedicated
+// sequential counter (not tied to manifest.length, which also grows from
+// unrelated inline images) specifically so they're fully predictable
+// ahead of the real write loop.
+function resolveSections(sections: EpubSection[]): ResolvedSection[] {
+  const resolved: ResolvedSection[] = [];
+  let partNumber = 0;
+  let chapterNumber = 0;
+  let chapterFileIndex = 0;
+
+  function resolveChapter(chapter: EpubChapter): ResolvedSection {
+    if (chapter.pageType === "CHAPTER") chapterNumber += 1;
+    chapterFileIndex += 1;
+    const id = `chapter-${chapterFileIndex}`;
+    const label = chapterHeadingLabel({
+      pageType: chapter.pageType,
+      title: chapter.title,
+      numbered: chapter.numbered,
+      chapterNumber,
+    });
+    return {
+      kind: "chapter",
+      id,
+      filename: `${id}.xhtml`,
+      title: label || chapter.title || PAGE_TYPE_LABELS[chapter.pageType],
+      chapterNumber,
+      pageType: chapter.pageType,
+      chapter,
+    };
+  }
+
+  for (const section of sections) {
+    if (section.kind === "part") {
+      partNumber += 1;
+      const id = `part-${partNumber}`;
+      resolved.push({
+        kind: "part",
+        id,
+        filename: `${id}.xhtml`,
+        title: section.part.title,
+        chapterNumber: 0,
+        part: section.part,
+      });
+      for (const chapter of section.part.chapters) {
+        resolved.push(resolveChapter(chapter));
+      }
+    } else {
+      resolved.push(resolveChapter(section.chapter));
+    }
+  }
+
+  return resolved;
+}
+
+// Groups the TOC-eligible chapters (PAGE_TYPE_IN_TOC) under whichever
+// Part most recently preceded them -- chapters before the book's first
+// Part (or in a book with no Parts at all) land in one partTitle:null
+// group. A group with zero chapters (a Part with no in-TOC children, or
+// no chapters before the first Part) is dropped rather than shown as an
+// empty heading.
+function buildTocGroups(resolved: ResolvedSection[]): TocGroup[] {
+  const groups: TocGroup[] = [];
+  let current: TocGroup = { partTitle: null, partHref: null, chapters: [] };
+  groups.push(current);
+
+  for (const item of resolved) {
+    if (item.kind === "part") {
+      current = { partTitle: item.title, partHref: item.filename, chapters: [] };
+      groups.push(current);
+    } else if (PAGE_TYPE_IN_TOC[item.pageType!]) {
+      current.chapters.push({ href: item.filename, title: item.title });
+    }
+  }
+
+  return groups.filter((g) => g.chapters.length > 0);
+}
+
+function contentsXhtml(book: EpubBookInput, groups: TocGroup[]): string {
+  const body = groups
+    .map((g) => {
+      const items = g.chapters
+        .map((c) => `        <li><a href="${c.href}">${escapeXml(c.title)}</a></li>`)
+        .join("\n");
+      if (g.partTitle === null) return items;
+      return `      <li class="toc-part">
+        <a href="${g.partHref}">${escapeXml(g.partTitle)}</a>
+        <ol>
+${items}
+        </ol>
+      </li>`;
+    })
+    .join("\n");
+
+  return xhtmlPage(
+    `${book.title} -- Contents`,
+    `  <section class="contents-page">
+    <h1>Contents</h1>
+    <ol>
+${body}
+    </ol>
+  </section>`,
+    "contents-page"
+  );
+}
 
 function chapterPageHtml(chapter: EpubChapter, chapterNumber: number, ctx?: RenderContext): string {
   const nonEmptyScenes = chapter.scenes.filter((s) => !isSceneContentEmpty(s.content));
@@ -328,6 +458,40 @@ a {
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
+/* The new in-book "Contents" page (2026-09-11, author request) -- a real,
+   visible page right after the title page, distinct from the e-reader's
+   own built-in Contents/TOC menu (nav.xhtml, unaffected by any of this). */
+.contents-page h1 {
+  margin-bottom: 1em;
+}
+.contents-page ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.contents-page ol ol {
+  margin-top: 0.4em;
+  padding-left: 1.5em;
+}
+.contents-page > section > ol > li {
+  margin: 0.7em 0;
+  text-align: center;
+}
+.toc-part > a {
+  font-weight: bold;
+  text-decoration: none;
+  color: inherit;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+.toc-part ol li {
+  margin: 0.5em 0;
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 1em;
+}
 blockquote {
   margin: 1em 2em;
   font-style: italic;
@@ -490,52 +654,31 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
   }
   const renderCtx: RenderContext = { resolveImage };
 
-  let chapterNumber = 0;
-  let partNumber = 0;
+  // resolveSections() is the ONE place that numbers/files every part and
+  // chapter, so the Contents page (which has to exist in the spine BEFORE
+  // any chapter content, but needs to link to chapters that are written
+  // AFTER it) and the real write loop below can never disagree on a
+  // filename, title, or chapter number.
+  const resolved = resolveSections(book.sections);
 
-  function addChapter(chapter: EpubChapter) {
-    // Only real chapters advance the auto-number -- a Dedication or
-    // Acknowledgments page sitting between Chapter 2 and Chapter 3
-    // shouldn't bump the next one to "Chapter 4".
-    if (chapter.pageType === "CHAPTER") chapterNumber += 1;
-    const label = chapterHeadingLabel({
-      pageType: chapter.pageType,
-      title: chapter.title,
-      numbered: chapter.numbered,
-      chapterNumber,
-    });
-    const id = `chapter-${manifest.length}`;
-    const filename = `${id}.xhtml`;
-    oebps.file(filename, chapterPageHtml(chapter, chapterNumber, renderCtx));
-    manifest.push({ id, filename, mediaType: "application/xhtml+xml" });
-    spineIds.push(id);
-    // The nav/TOC entry always needs SOME distinguishing text (unlike the
-    // page itself, which can legitimately print nothing -- see
-    // PAGE_TYPE_DEFAULT_HEADING's UNCATEGORIZED case) -- fall back to the
-    // page type's own generic name rather than the bare, unhelpful word
-    // "Chapter" a blank-everything node used to get listed as.
-    navEntries.push({
-      filename,
-      title: label || chapter.title || PAGE_TYPE_LABELS[chapter.pageType],
-      isPart: false,
-    });
+  const tocGroups = buildTocGroups(resolved);
+  if (tocGroups.length > 0) {
+    oebps.file("contents.xhtml", contentsXhtml(book, tocGroups));
+    manifest.push({ id: "contents", filename: "contents.xhtml", mediaType: "application/xhtml+xml" });
+    spineIds.push("contents");
   }
 
-  for (const section of book.sections) {
-    if (section.kind === "part") {
-      partNumber += 1;
-      const partId = `part-${partNumber}`;
-      const partFilename = `${partId}.xhtml`;
-      oebps.file(partFilename, partPageHtml(section.part));
-      manifest.push({ id: partId, filename: partFilename, mediaType: "application/xhtml+xml" });
-      spineIds.push(partId);
-      navEntries.push({ filename: partFilename, title: section.part.title, isPart: true });
-
-      for (const chapter of section.part.chapters) {
-        addChapter(chapter);
-      }
+  for (const item of resolved) {
+    if (item.kind === "part") {
+      oebps.file(item.filename, partPageHtml(item.part!));
+      manifest.push({ id: item.id, filename: item.filename, mediaType: "application/xhtml+xml" });
+      spineIds.push(item.id);
+      navEntries.push({ filename: item.filename, title: item.title, isPart: true });
     } else {
-      addChapter(section.chapter);
+      oebps.file(item.filename, chapterPageHtml(item.chapter!, item.chapterNumber, renderCtx));
+      manifest.push({ id: item.id, filename: item.filename, mediaType: "application/xhtml+xml" });
+      spineIds.push(item.id);
+      navEntries.push({ filename: item.filename, title: item.title, isPart: false });
     }
   }
 

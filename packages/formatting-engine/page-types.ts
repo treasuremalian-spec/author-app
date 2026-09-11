@@ -94,6 +94,41 @@ export const PAGE_TYPE_DEFAULT_HEADING: Record<PageType, string> = {
 };
 
 /**
+ * Which page types show up in a real, in-book Table of Contents -- the
+ * EPUB's own "Contents" page and the print PDF's optional TOC page (both
+ * added 2026-09-11, author request). Confirmed with the author before
+ * building: the "real" reading content only -- Chapters, Prologue, and
+ * Epilogue -- matching how most published fiction's own TOC looks, and
+ * deliberately skipping front-/back-matter like Copyright, Dedication,
+ * Epigraph, Foreword, Introduction, Preface, Afterword, Bibliography,
+ * Acknowledgments, About the Author, Also By, and Uncategorized. This is
+ * SEPARATE from EPUB_TYPE_BY_PAGE_TYPE (build-epub.ts) -- that's about
+ * giving every page type real EPUB3 semantics; this is specifically about
+ * what's worth a reader jumping to from a Contents page. Note this only
+ * governs the new in-book Contents page -- the e-reader's own built-in
+ * TOC menu (nav.xhtml) is unrelated and unchanged, and still lists every
+ * page type as it always has.
+ */
+export const PAGE_TYPE_IN_TOC: Record<PageType, boolean> = {
+  CHAPTER: true,
+  PROLOGUE: true,
+  EPILOGUE: true,
+  BLURBS: false,
+  COPYRIGHT: false,
+  DEDICATION: false,
+  EPIGRAPH: false,
+  FOREWORD: false,
+  INTRODUCTION: false,
+  PREFACE: false,
+  AFTERWORD: false,
+  BIBLIOGRAPHY: false,
+  ACKNOWLEDGMENTS: false,
+  ABOUT_THE_AUTHOR: false,
+  ALSO_BY: false,
+  UNCATEGORIZED: false,
+};
+
+/**
  * The single place that decides what heading text prints above a
  * chapter-level node's content -- shared by print-html.ts, build-epub.ts
  * and build-docx.ts so the three renderers can never drift on this.
