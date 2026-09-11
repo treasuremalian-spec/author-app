@@ -12,3 +12,7 @@ build/
 
 # Files delivered via chat land here automatically -- not part of the project
 Claude outputs/
+
+# One-off data-migration backups (contain real manuscript content) -- keep
+# them on disk, never in git history
+packages/database/scripts/scene-merge-backup-*.json
