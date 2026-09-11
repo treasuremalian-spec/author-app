@@ -233,9 +233,9 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                   )
                 )}
                 <div
-                  className={`format-preview-page__body${options.dropCaps ? " format-preview-page__body--drop-cap" : ""}${
-                    options.indentParagraphs ? "" : " format-preview-page__body--block"
-                  }`}
+                  className={`format-preview-page__body${
+                    options.dropCaps && chapter.pageType === "CHAPTER" ? " format-preview-page__body--drop-cap" : ""
+                  }${options.indentParagraphs ? "" : " format-preview-page__body--block"}`}
                   style={bodyStyle}
                   dangerouslySetInnerHTML={{ __html: chapter.html }}
                 />

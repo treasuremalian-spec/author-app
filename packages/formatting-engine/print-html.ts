@@ -284,7 +284,17 @@ function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: Re
 // come first means the drop cap span ends up correctly nested inside them
 // (e.g. "<em><span class="chapter-drop-cap">T</span>he smell...") instead
 // of splitting a tag in half.
-function markChapterFirstParagraph(html: string): string {
+// `applyDropCap` (author request, 2026-09-11: "Drop Cap only applies to
+// pages that categorized as Chapter") gates ONLY the enlarged-letter
+// <span> below -- the text-indent reset (class="chapter-first-paragraph")
+// still applies to every chapter-like page type (Prologue, Dedication,
+// Copyright, etc.), since an opening paragraph directly under a heading
+// should never be indented regardless of whether it also gets a drop
+// cap. Before this, a Prologue/Epilogue/Copyright/etc. page got the
+// exact same giant-letter treatment as a real Chapter whenever the
+// dropCaps option was on, since this function had no concept of page
+// type at all.
+function markChapterFirstParagraph(html: string, applyDropCap: boolean): string {
   // Find the first ORDINARY body paragraph -- skip past any special-
   // purpose <p> a chapter might happen to open with: a manual scene
   // break's own <p class="scene-break"> (see the "sceneBreak" case in
@@ -340,6 +350,9 @@ function markChapterFirstParagraph(html: string): string {
 
   const firstUnit = unitMatch[0];
   const rest = after.slice(firstUnit.length);
+  if (!applyDropCap) {
+    return `${before}${newOpenTag}${leadingTags}${firstUnit}${rest}`;
+  }
   return `${before}${newOpenTag}${leadingTags}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
@@ -371,7 +384,7 @@ function chapterHtml(
       return html;
     })
     .join("\n");
-  const markedScenesHtml = markChapterFirstParagraph(scenesHtml);
+  const markedScenesHtml = markChapterFirstParagraph(scenesHtml, chapter.pageType === "CHAPTER");
 
   // No <h1> at all (not just visually hidden) when the heading is off --
   // this also means nothing ever calls "string-set: chaptertitle" for
