@@ -9,7 +9,7 @@
 // or two generating a real PDF.
 
 import { useState } from "react";
-import { Download, FileText, Upload } from "lucide-react";
+import { BookOpen, Download, FileText, Upload } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { TRIM_SIZE_GROUPS, TRIM_SIZE_DIMENSIONS, DEFAULT_TRIM_SIZE, type TrimSize } from "@author-app/formatting-engine/trim-sizes";
 import type { FormatPreviewData } from "@/lib/actions/format";
 import { FormatPreview } from "./FormatPreview";
+import { PagePreviewModal } from "./PagePreviewModal";
 import { ReimportManuscriptDialog } from "./ReimportManuscriptDialog";
 import { BackgroundImageUploadButton } from "./BackgroundImageUploadButton";
 
@@ -84,7 +85,14 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   largePrint: false,
 };
 
-function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
+// Shared by the real "Download PDF" link and the new "Page Preview" modal
+// (2026-09-11) -- both need to describe EXACTLY the same print options to
+// their respective server routes (export/pdf/route.ts and
+// format/page-preview/route.ts, which parse this same query-string shape
+// via lib/print-options-query.ts), so Page Preview always shows precisely
+// what a PDF download right now would produce, never a slightly different
+// or stale set of options.
+function buildPrintOptionsQueryString(trim: TrimSize, options: PrintOptionsState): string {
   const params = new URLSearchParams({
     trim,
     mirroredMargins: options.mirroredMargins ? "1" : "0",
@@ -99,7 +107,11 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread ? "1" : "0",
     largePrint: options.largePrint ? "1" : "0",
   });
-  return `/projects/${projectId}/export/pdf?${params.toString()}`;
+  return params.toString();
+}
+
+function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
+  return `/projects/${projectId}/export/pdf?${buildPrintOptionsQueryString(trim, options)}`;
 }
 
 export function FormatWorkspace({
@@ -344,7 +356,21 @@ export function FormatWorkspace({
                     Download PDF
                   </a>
                 </Button>
+                <PagePreviewModal
+                  projectId={projectId}
+                  queryString={buildPrintOptionsQueryString(previewTrim, options)}
+                >
+                  <Button size="sm" variant="outline">
+                    <BookOpen className="size-3.5" />
+                    Page Preview
+                  </Button>
+                </PagePreviewModal>
               </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Page Preview shows the real, paginated layout -- true page breaks and exact background placement,
+                same as your PDF download. It takes a moment to generate, so it&apos;s a click, not instant like the
+                preview on the right.
+              </p>
             </div>
           </Card>
 

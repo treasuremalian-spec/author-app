@@ -28,69 +28,19 @@
 // package's dist/ folder are read from node_modules at runtime via
 // non-static paths, which Next.js's build-time file tracer can miss.
 // apps/web/next.config.ts has an `outputFileTracingIncludes` entry for
-// this route that must stay in sync with this file if it moves.
+// THIS route that must stay in sync if it moves -- and a SEPARATE entry
+// for the "Page Preview" route (see paged-polyfill-source.ts's file
+// comment), since that route needs the pagedjs glob too but not
+// @sparticuz/chromium (no headless-Chromium rendering happens there).
 
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import fs from "node:fs";
-import path from "node:path";
+import { loadPagedPolyfillSource } from "./paged-polyfill-source";
 // renderPrintPdf now takes the real physical page size directly (in
 // inches) rather than a TrimSize -- see PrintDocument in print-html.ts and
 // the BLEED_IN comment there for why the two aren't always the same
 // anymore (a book with a full-spread image prints at trim size + real
 // print bleed, not exactly its nominal trim size).
-
-// pagedjs's package.json restricts imports to its declared `exports` map,
-// which does not include anything under dist/ -- so a direct
-// require.resolve("pagedjs/dist/paged.polyfill.min.js") fails at build
-// time (Turbopack enforces the same exports restriction Node itself does,
-// and failed the Vercel build on the first deploy attempt).
-//
-// A later attempt resolved the package's real entry point via
-// require.resolve("pagedjs") and computed the dist path from there --
-// but that broke too (2026-09-05, found via the pdf.json error the PDF
-// export route now returns on failure -- see route.ts): in the deployed
-// Vercel function, Turbopack's bundling of require.resolve() for an
-// externalized package (see serverExternalPackages in next.config.ts)
-// returned an internal bundler module id -- a bare NUMBER -- instead of a
-// real file path, crashing path.dirname() with "The path argument must
-// be of type string. Received type number". This is a known class of
-// Turbopack bug around require.resolve() + externalized native/asset
-// packages in a monorepo (see e.g. vercel/next.js#76497, #87737) -- not
-// fixable by changing what we resolve, since require.resolve() itself is
-// the unreliable part here.
-//
-// Fix: don't use require.resolve() (or any bundler-visible require/import
-// of "pagedjs") to find the file at all. Walk up from the process's own
-// working directory looking for a real node_modules/pagedjs folder on
-// disk -- plain fs.existsSync checks, nothing a bundler can rewrite. This
-// works locally (cwd is apps/web; pagedjs is hoisted one level up to the
-// npm workspaces root's node_modules) and on Vercel (cwd is the deployed
-// function root, which outputFileTracingIncludes below guarantees has a
-// real node_modules/pagedjs/dist on disk) without needing to know or
-// guess which of those two shapes we're actually running under.
-function findNodeModulesDir(packageName: string): string {
-  let dir = process.cwd();
-  for (;;) {
-    const candidate = path.join(dir, "node_modules", packageName);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error(
-        `Could not find node_modules/${packageName} by walking up from ${process.cwd()}.`
-      );
-    }
-    dir = parent;
-  }
-}
-
-function loadPagedPolyfillSource(): string {
-  const packageRoot = findNodeModulesDir("pagedjs");
-  const polyfillPath = path.join(packageRoot, "dist", "paged.polyfill.min.js");
-  return fs.readFileSync(polyfillPath, "utf8");
-}
 
 // @sparticuz/chromium extracts its bundled Chromium binary to /tmp/chromium
 // the first time executablePath() is called in a given (warm) serverless
