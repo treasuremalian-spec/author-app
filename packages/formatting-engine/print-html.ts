@@ -834,6 +834,18 @@ body {
   line-height: ${lineSpacing};
   color: #1a1a1a;
 }
+/* A clickable link (see tiptap-to-xhtml.ts's "link" mark) still needs to
+   be a real "a href" here for the underlying PDF link annotation to
+   exist at all (Chromium's page.pdf() bakes real, clickable link
+   annotations from real anchor tags -- confirmed via a real render, see
+   engineering_notes.md) -- but a physical printed book has no use for
+   blue/underlined "this is a link" styling, so it deliberately renders
+   as completely normal body text. Author-confirmed (2026-09-11): works
+   if the PDF is opened and clicked on a screen, invisible on paper. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
 p {
   margin: 0;
   text-align: justify;

@@ -61,11 +61,26 @@ const MARK_TAGS: Record<string, string> = {
   code: "code",
 };
 
+/** Only these URL schemes are ever allowed to become a real "a href" in an
+ * exported file -- a stray "javascript:" (pasted, or malformed) rendered
+ * straight into an EPUB/PDF would be a real, if minor, security footgun
+ * for anyone who opens the exported file, not just this app. Anything
+ * else silently renders as plain (unlinked) text rather than failing the
+ * whole export. */
+function isSafeLinkHref(href: string): boolean {
+  return /^(https?:|mailto:)/i.test(href.trim());
+}
+
 function renderMarks(text: string, marks: DocNode["marks"]): string {
   if (!marks || marks.length === 0) return text;
   // Apply innermost-first so nesting order is stable regardless of the
   // order Tiptap recorded the marks in.
   return marks.reduce((inner, mark) => {
+    if (mark.type === "link") {
+      const href = typeof mark.attrs?.href === "string" ? mark.attrs.href : "";
+      if (!isSafeLinkHref(href)) return inner;
+      return `<a href="${escapeXml(href)}">${inner}</a>`;
+    }
     const tag = MARK_TAGS[mark.type];
     if (!tag) return inner;
     return `<${tag}>${inner}</${tag}>`;

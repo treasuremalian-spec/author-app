@@ -7,6 +7,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
+import Link from "@tiptap/extension-link";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { PageBreak } from "./extensions/page-break";
@@ -87,6 +88,18 @@ export function SceneEditor({
         Underline,
         TextAlign.configure({ types: ["heading", "paragraph", "textMessage"] }),
         Placeholder.configure({ placeholder: "Start writing..." }),
+        // EPUB hyperlinks (backlog item 5, 2026-09-11) -- openOnClick:false
+        // so a click while WRITING places the cursor/selects text like any
+        // other mark instead of navigating away; the Toolbar's own Link
+        // button is how a link actually gets added/edited/removed (see
+        // Toolbar.tsx). autolink/linkOnPaste so a typed or pasted URL
+        // becomes a real link mark without needing the toolbar at all.
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          HTMLAttributes: { rel: "noopener noreferrer" },
+        }),
         PageBreak,
         SceneBreak,
         TextMessage,

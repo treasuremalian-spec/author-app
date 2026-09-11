@@ -23,6 +23,7 @@
     "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.115.0",
     "@tiptap/extension-character-count": "^2.27.3",
+    "@tiptap/extension-link": "^2.27.3",
     "@tiptap/extension-placeholder": "^2.27.3",
     "@tiptap/extension-text-align": "^2.27.3",
     "@tiptap/extension-underline": "^2.27.3",

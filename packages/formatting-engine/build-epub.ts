@@ -210,6 +210,14 @@ h1 + p,
 .scene-break + p {
   text-indent: 0;
 }
+/* A clickable link (see tiptap-to-xhtml.ts's "link" mark) -- explicit
+   styling rather than relying on each e-reader's own default "a" look,
+   which varies. Print's own stylesheet (print-html.ts) deliberately does
+   NOT style links this way -- see the comment there. */
+a {
+  color: #2952a3;
+  text-decoration: underline;
+}
 .scene-break {
   text-align: center;
   text-indent: 0;

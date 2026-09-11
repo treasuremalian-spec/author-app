@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
   Bold,
@@ -21,6 +21,8 @@ import {
   Loader2,
   Undo2,
   Redo2,
+  Link as LinkIcon,
+  Unlink,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -76,10 +78,61 @@ interface EditorToolbarProps {
   sceneId: string;
 }
 
+// Bare "example.com" -> "https://example.com"; an address-looking string
+// with no scheme -> "mailto:". Typing a link shouldn't require knowing
+// the exact "https://" prefix by heart, but the export pipeline's own
+// isSafeLinkHref() (tiptap-to-xhtml.ts) only accepts http(s)/mailto, so a
+// scheme-less URL needs to become one of those or it would silently
+// render as plain, unlinked text on export with no explanation why.
+function normalizeLinkUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^(https?:|mailto:)/i.test(trimmed)) return trimmed;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return `mailto:${trimmed}`;
+  return `https://${trimmed}`;
+}
+
 export function EditorToolbar({ editor, projectId, sceneId }: EditorToolbarProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
+  const linkEditorRef = useRef<HTMLDivElement>(null);
+
+  // Close the URL popover on an outside click (Escape already closes it via
+  // the input's own onKeyDown) -- without this, clicking anywhere else in
+  // the editor leaves the popover floating open indefinitely.
+  useEffect(() => {
+    if (!linkEditorOpen) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (linkEditorRef.current && !linkEditorRef.current.contains(e.target as Node)) {
+        setLinkEditorOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [linkEditorOpen]);
+
+  function openLinkEditor() {
+    const existing = editor.getAttributes("link").href;
+    setLinkUrlDraft(typeof existing === "string" ? existing : "");
+    setLinkEditorOpen(true);
+  }
+
+  function commitLink() {
+    const trimmed = linkUrlDraft.trim();
+    setLinkEditorOpen(false);
+    if (!trimmed) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: normalizeLinkUrl(trimmed) }).run();
+  }
+
+  function removeLink() {
+    setLinkEditorOpen(false);
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+  }
 
   // Uploads straight from the browser to Supabase Storage (no server
   // round-trip for the file bytes), exactly like CoverUploadButton.tsx --
@@ -195,6 +248,50 @@ export function EditorToolbar({ editor, projectId, sceneId }: EditorToolbarProps
       >
         <UnderlineIcon className="size-4" />
       </ToolbarButton>
+      <div className="relative" ref={linkEditorRef}>
+        <ToolbarButton
+          label={editor.isActive("link") ? "Edit link" : "Add link"}
+          active={editor.isActive("link") || linkEditorOpen}
+          onClick={openLinkEditor}
+        >
+          <LinkIcon className="size-4" />
+        </ToolbarButton>
+
+        {linkEditorOpen && (
+          <div className="absolute left-0 top-full z-10 mt-1 flex items-center gap-1 rounded-md border border-border bg-card p-1 shadow-md">
+            <input
+              autoFocus
+              type="text"
+              value={linkUrlDraft}
+              onChange={(e) => setLinkUrlDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitLink();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setLinkEditorOpen(false);
+                }
+              }}
+              placeholder="https://... or name@email.com"
+              className="w-56 rounded border border-input bg-background px-2 py-1 text-xs outline-none"
+            />
+            <button
+              type="button"
+              onClick={commitLink}
+              className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
+            >
+              {editor.isActive("link") ? "Update" : "Add"}
+            </button>
+          </div>
+        )}
+      </div>
+      {editor.isActive("link") && (
+        <ToolbarButton label="Remove link" onClick={removeLink}>
+          <Unlink className="size-4" />
+        </ToolbarButton>
+      )}
 
       <Divider />
 
