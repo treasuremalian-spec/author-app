@@ -21,7 +21,7 @@
 // facing pages) -- this preview only ever shows one continuous flow, not
 // discrete pages.
 
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "@author-app/formatting-engine/trim-sizes";
 import { PAGE_TYPE_IN_TOC } from "@author-app/formatting-engine/page-types";
 import type { FormatPreviewData } from "@/lib/actions/format";
@@ -188,8 +188,26 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
               const authorLine = chapter.chapterAuthor?.trim() ? (
                 <p className="format-preview-page__author">by {chapter.chapterAuthor.trim()}</p>
               ) : null;
+              // A Part's own divider page (author request, 2026-09-11 --
+              // mirrors print-html.ts's partDividerHtml()/the EPUB's own
+              // Part divider page), shown immediately before the first
+              // chapter under that Part.
+              const partDivider = chapter.partTitle !== null ? (
+                <section
+                  className={`format-preview-page__part-divider${index > 0 ? " format-preview-page__chapter--break" : ""}`}
+                >
+                  <p className="format-preview-page__part-label">Part</p>
+                  <h1 className="format-preview-page__title">{chapter.partTitle}</h1>
+                </section>
+              ) : null;
               return (
-              <section key={index} className={`format-preview-page__chapter${index > 0 ? " format-preview-page__chapter--break" : ""}`}>
+              <Fragment key={index}>
+              {partDivider}
+              <section
+                className={`format-preview-page__chapter${
+                  index > 0 && !partDivider ? " format-preview-page__chapter--break" : ""
+                }`}
+              >
                 {showChapterStartBackground ? (
                   <div
                     className="format-preview-page__chapter-start-band"
@@ -217,11 +235,11 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                         <h1
                           className="format-preview-page__title format-preview-page__title--on-band"
                           style={options.backgroundImageTextColor === "light" ? { color: "#fff" } : undefined}
-                        >
-                          {chapter.title}
-                        </h1>
-                        {authorLine}
-                      </>
+                      >
+                        {chapter.title}
+                      </h1>
+                      {authorLine}
+                    </>
                     )}
                   </div>
                 ) : (
@@ -240,6 +258,7 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                   dangerouslySetInnerHTML={{ __html: chapter.html }}
                 />
               </section>
+              </Fragment>
               );
             })
           ) : (
@@ -262,6 +281,28 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           margin-top: 2.6em;
           padding-top: 2em;
           border-top: 1px dashed rgba(0, 0, 0, 0.12);
+        }
+        /* A Part's own divider page (mirrors print-html.ts's
+           partDividerHtml()'s ".part-divider"/".part-label"). */
+        .format-preview-page__part-divider {
+          text-align: center;
+          padding: 3em 0 2em;
+        }
+        .format-preview-page__part-label {
+          text-transform: uppercase;
+          letter-spacing: 0.25em;
+          font-size: 0.75em;
+          color: rgba(0, 0, 0, 0.55);
+          margin: 0 0 0.6em;
+        }
+        /* Mirrors print-html.ts's buildCss() global "a" rule: a real link
+           still needs a real <a href> for the PDF's clickable link
+           annotation to exist, but reads as ordinary text on the page
+           (author-confirmed 2026-09-11) -- so the preview shouldn't show
+           the browser's default blue/underlined link styling either. */
+        .format-preview-page__body a {
+          color: inherit;
+          text-decoration: none;
         }
         .format-preview-page__title {
           text-align: center;

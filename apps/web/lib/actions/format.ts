@@ -53,6 +53,14 @@ export interface FormatPreviewChapter {
   showHeadingOverride: boolean | null;
   /** "Add Chapter Author" byline, if set. */
   chapterAuthor: string | null;
+  /** Set only on the first chapter under a Part node -- the Part's own
+   * title, so the preview can show a Part divider page immediately before
+   * this chapter (mirrors print-html.ts's partDividerHtml() /
+   * build-epub.ts's own Part divider page, author request 2026-09-11:
+   * "the live preview ... need an update to reflect all the changes we've
+   * made"). null for every chapter that isn't the first one under a Part,
+   * and for every chapter that isn't under a Part at all. */
+  partTitle: string | null;
   /** Pre-rendered XHTML of this chapter's non-empty scenes -- image src
    * attributes are left as their real Supabase Storage public URLs (see
    * the file comment above), so the browser fetches them directly rather
@@ -134,14 +142,28 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
   const roots = buildTree(treeNodes);
 
   // Flatten to CHAPTER nodes in reading order, regardless of whether
-  // they're nested under a PART -- the preview doesn't render part
-  // dividers as their own page, just the chapters in sequence.
+  // they're nested under a PART -- the preview still shows one continuous
+  // scroll of chapters (see the file comment above), but a Part's own
+  // divider page IS now represented: partTitleByFirstChapterId records
+  // which chapter is the first one under a given Part, so the preview can
+  // render that Part's title as its own page immediately before it
+  // (2026-09-11, matching print-html.ts's partDividerHtml() / the EPUB's
+  // own Part divider page -- previously a Part's presence was invisible in
+  // the preview entirely, chapters just ran together with no indication a
+  // Part boundary existed there).
   const chapters: typeof roots = [];
+  const partTitleByFirstChapterId = new Map<string, string>();
   for (const root of roots) {
     if (root.type === "CHAPTER") chapters.push(root);
     else if (root.type === "PART") {
+      let firstChapterInPart = true;
       for (const child of root.children) {
-        if (child.type === "CHAPTER") chapters.push(child);
+        if (child.type !== "CHAPTER") continue;
+        chapters.push(child);
+        if (firstChapterInPart) {
+          partTitleByFirstChapterId.set(child.id, root.title);
+          firstChapterInPart = false;
+        }
       }
     }
   }
@@ -173,6 +195,7 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
       pageType: chapter.pageType,
       showHeadingOverride: chapter.showHeadingOverride,
       chapterAuthor: chapter.chapterAuthor,
+      partTitle: partTitleByFirstChapterId.get(chapter.id) ?? null,
       html: sceneHtmls.join('\n<p class="scene-break">⁂</p>\n'),
     };
   });
@@ -186,6 +209,7 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
       pageType: previewChapters[0]?.pageType || "CHAPTER",
       showHeadingOverride: null,
       chapterAuthor: null,
+      partTitle: null,
       html: "<p>Start writing to see your book take shape here -- this preview mirrors your manuscript as you format it.</p>",
     });
   }
