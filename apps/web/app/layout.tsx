@@ -33,14 +33,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         {/* "Warm Industrial" site-wide texture -- see globals.css. Purely
-            decorative, sits behind every page's real content. */}
-        <div className="bg-grid-lines" aria-hidden="true">
-          <div className="bg-grid-lines__inner">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} />
-            ))}
-          </div>
-        </div>
+            decorative, sits behind every page's real content. (The 12-col
+            grid-line layer was removed 2026-09-11 -- Tasia felt the lines
+            overpowered the design. Noise stays, it's much more subtle.) */}
         <div className="bg-noise" aria-hidden="true" />
         {children}
       </body>

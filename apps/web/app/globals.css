@@ -119,32 +119,13 @@ body {
 }
 
 /* ---------------------------------------------------------------------
-   "Warm Industrial" site-wide texture layer -- a fixed 12-column grid-line
-   background and a faint fractal-noise overlay, both rendered once in
-   RootLayout (see layout.tsx) so every page gets them without per-page
-   setup. Both are decorative (aria-hidden, pointer-events: none) and sit
-   at z-index 0 with no explicit stacking context of their own; ordinary
-   page content that follows them in the DOM paints on top automatically. */
-.bg-grid-lines {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-}
-.bg-grid-lines__inner {
-  width: min(100%, 1600px);
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-}
-.bg-grid-lines__inner > div {
-  border-left: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-.bg-grid-lines__inner > div:last-child {
-  border-right: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
+   "Warm Industrial" site-wide texture layer -- a faint fractal-noise
+   overlay, rendered once in RootLayout (see layout.tsx) so every page
+   gets it without per-page setup. Decorative (aria-hidden, pointer-events:
+   none), sits at z-index 0 with no explicit stacking context of its own;
+   ordinary page content that follows it in the DOM paints on top
+   automatically. (A 12-column grid-line layer used to live here too --
+   removed 2026-09-11, Tasia felt the lines overpowered the design.) */
 .bg-noise {
   position: fixed;
   inset: 0;
