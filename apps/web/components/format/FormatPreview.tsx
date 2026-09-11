@@ -156,9 +156,9 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
 
   return (
     <div className="sticky top-4 flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live preview</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Live preview</p>
       <div
-        className="w-full rounded-md border border-border bg-white shadow-sm"
+        className="w-full rounded-md border border-border bg-white shadow-none"
         style={pageStyle}
       >
         <div className="format-preview-page">

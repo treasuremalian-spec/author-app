@@ -120,9 +120,9 @@ export function FormatWorkspace({
     <div className="h-full overflow-y-auto bg-muted/20">
       <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1.15fr_1fr]">
         <div className="space-y-5">
-          <Card className="flex flex-col gap-4 p-5">
+          <Card className="flex flex-col gap-4 p-5 shadow-none">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Export</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Export</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Download your manuscript as a real e-book file -- opens in Kindle, Apple Books, Kobo, and more.
               </p>
@@ -135,25 +135,25 @@ export function FormatWorkspace({
             </Button>
 
             <div className="border-t pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Print-ready PDF</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Print-ready PDF</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 A real, paginated book layout -- running headers, page numbers, and chapter starts, ready to send to
                 a printer. Longer books can take a minute or two to generate, so give it a moment after you click.
               </p>
               {preview?.hasSpreadImage && (
-                <p className="mt-2 rounded-md bg-accent/10 px-2.5 py-1.5 text-xs text-accent-foreground">
+                <p className="mt-2 border border-accent/30 bg-accent/5 px-2.5 py-1.5 text-xs text-foreground">
                   This book has a full-page spread image, so every page will print 0.125&quot; larger on each side
                   for real print bleed -- your printer trims that away.
                 </p>
               )}
 
-              <div className="mt-3 space-y-2.5 rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Print options</p>
+              <div className="mt-3 space-y-2.5 border border-border bg-muted/30 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Print options</p>
 
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.mirroredMargins}
                     onChange={() => toggle("mirroredMargins")}
                   />
@@ -163,7 +163,7 @@ export function FormatWorkspace({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.indentParagraphs}
                     onChange={() => toggle("indentParagraphs")}
                   />
@@ -173,7 +173,7 @@ export function FormatWorkspace({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.dropCaps}
                     onChange={() => toggle("dropCaps")}
                   />
@@ -183,7 +183,7 @@ export function FormatWorkspace({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.chapterStartsOnRight}
                     onChange={() => toggle("chapterStartsOnRight")}
                   />
@@ -193,7 +193,7 @@ export function FormatWorkspace({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.showChapterTitles}
                     onChange={() => toggle("showChapterTitles")}
                   />
@@ -219,7 +219,7 @@ export function FormatWorkspace({
                       </Label>
                       <select
                         id="background-image-mode"
-                        className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                        className="h-8 border border-input bg-card px-2 text-sm shadow-none"
                         value={options.backgroundImageMode}
                         onChange={(event) =>
                           setOptions((prev) => ({
@@ -238,7 +238,7 @@ export function FormatWorkspace({
                     <label className="mt-2 flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
-                        className="size-3.5 rounded border-input"
+                        className="size-3.5 border-input"
                         checked={options.backgroundImageChapterStartSpread}
                         onChange={() =>
                           setOptions((prev) => ({
@@ -257,7 +257,7 @@ export function FormatWorkspace({
                       </Label>
                       <select
                         id="background-image-text-color"
-                        className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                        className="h-8 border border-input bg-card px-2 text-sm shadow-none"
                         value={options.backgroundImageTextColor}
                         onChange={(event) =>
                           setOptions((prev) => ({
@@ -279,7 +279,7 @@ export function FormatWorkspace({
                   </Label>
                   <select
                     id="line-spacing"
-                    className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                    className="h-8 border border-input bg-card px-2 text-sm shadow-none"
                     value={options.lineSpacing}
                     onChange={(event) => setOptions((prev) => ({ ...prev, lineSpacing: event.target.value }))}
                   >
@@ -293,7 +293,7 @@ export function FormatWorkspace({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    className="size-3.5 rounded border-input"
+                    className="size-3.5 border-input"
                     checked={options.largePrint}
                     onChange={() => toggle("largePrint")}
                   />
@@ -307,7 +307,7 @@ export function FormatWorkspace({
                 </Label>
                 <select
                   id="trim-size"
-                  className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                  className="h-8 border border-input bg-card px-2 text-sm shadow-none"
                   value={previewTrim}
                   onChange={(event) => setPreviewTrim(event.target.value as TrimSize)}
                 >
@@ -331,9 +331,9 @@ export function FormatWorkspace({
             </div>
           </Card>
 
-          <Card className="flex flex-col gap-3 p-5">
+          <Card className="flex flex-col gap-3 p-5 shadow-none">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Word document</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Word document</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Standard manuscript format -- Times New Roman, double-spaced, 1&quot; margins -- ready to send to an
                 editor, agent, or beta reader who wants a plain, markup-friendly file.
