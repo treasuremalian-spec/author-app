@@ -284,7 +284,9 @@ model ManuscriptNode {
   // that book-wide setting.
   showHeadingOverride Boolean?
 
-  // Present only when type = SCENE
+  // Present when type = SCENE, or when type = CHAPTER (a chapter carries
+  // its own Scene directly -- the single writing surface, 2026-09-11).
+  // Always absent on PART nodes.
   scene Scene?
 
   createdAt DateTime @default(now())

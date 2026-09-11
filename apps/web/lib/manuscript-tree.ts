@@ -77,7 +77,11 @@ export function buildTree(nodes: ManuscriptNodeData[]): TreeNode[] {
 }
 
 export function totalWordCount(node: TreeNode): number {
-  if (node.type === "SCENE") return node.scene?.wordCount ?? 0;
+  // A node with an attached scene IS the writing surface (true for every
+  // SCENE node, and for CHAPTER nodes now that a chapter is the single
+  // writing surface -- see childTypeAllowed() below) -- count its own
+  // word count rather than recursing into children.
+  if (node.scene) return node.scene.wordCount ?? 0;
   return node.children.reduce((sum, c) => sum + totalWordCount(c), 0);
 }
 
@@ -94,7 +98,9 @@ export function siblingsOf(nodes: ManuscriptNodeData[], parentId: string | null)
 export function childTypeAllowed(parentType: NodeType | null): NodeType[] {
   if (parentType === null) return ["PART", "CHAPTER"];
   if (parentType === "PART") return ["CHAPTER"];
-  if (parentType === "CHAPTER") return ["SCENE"];
+  // A CHAPTER is the writing surface itself now (it carries its own
+  // Scene directly, see manuscript.ts's createNode()) -- no more adding
+  // a separate SCENE underneath it.
   return [];
 }
 

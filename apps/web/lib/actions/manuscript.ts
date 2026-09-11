@@ -116,7 +116,11 @@ export async function createNode(input: {
     },
   });
 
-  if (input.type === "SCENE") {
+  // A CHAPTER is the single writing surface now (Scene.nodeId is a
+  // generic FK, not restricted to SCENE-type nodes) -- creating a
+  // chapter creates its attached Scene at the same time, same as a
+  // SCENE node always has.
+  if (input.type === "SCENE" || input.type === "CHAPTER") {
     await prisma.scene.create({
       data: { nodeId: node.id, content: EMPTY_DOC },
     });
@@ -125,7 +129,7 @@ export async function createNode(input: {
   revalidatePath(`/projects/${input.projectId}`);
 
   const scene =
-    input.type === "SCENE"
+    input.type === "SCENE" || input.type === "CHAPTER"
       ? await prisma.scene.findUnique({ where: { nodeId: node.id } })
       : null;
 

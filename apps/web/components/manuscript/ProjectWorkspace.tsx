@@ -29,12 +29,14 @@ interface ProjectWorkspaceProps {
   projectId: string;
   initialNodes: ManuscriptNodeData[];
   characters: { id: string; name: string }[];
-  // The SCENE node with the most recent scene.updatedAt (see
-  // getProjectData in lib/actions/manuscript.ts) -- opening the editor
-  // lands directly back on whatever was actually being written last,
-  // instead of always the first scene in tree order. Null for a brand-new
-  // project with no written scenes yet, or when the referenced node no
-  // longer exists (e.g. deleted since).
+  // The node (SCENE, or CHAPTER now that a chapter is the single writing
+  // surface -- see childTypeAllowed() in manuscript-tree.ts) with the
+  // most recent scene.updatedAt (see getProjectData in
+  // lib/actions/manuscript.ts) -- opening the editor lands directly back
+  // on whatever was actually being written last, instead of always the
+  // first scene in tree order. Null for a brand-new project with no
+  // written scenes yet, or when the referenced node no longer exists
+  // (e.g. deleted since).
   initialSelectedNodeId?: string | null;
 }
 
@@ -47,9 +49,9 @@ export function ProjectWorkspace({
   const [nodes, setNodes] = useState<ManuscriptNodeData[]>(initialNodes);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => {
     const lastEdited = initialSelectedNodeId
-      ? initialNodes.find((n) => n.id === initialSelectedNodeId && n.type === "SCENE")
+      ? initialNodes.find((n) => n.id === initialSelectedNodeId && n.scene)
       : null;
-    return lastEdited?.id ?? initialNodes.find((n) => n.type === "SCENE")?.id ?? null;
+    return lastEdited?.id ?? initialNodes.find((n) => n.scene)?.id ?? null;
   });
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -93,7 +95,7 @@ export function ProjectWorkspace({
           : null,
       },
     ]);
-    if (type === "SCENE") setSelectedNodeId(created.id);
+    if (created.scene) setSelectedNodeId(created.id);
   }
 
   function handleRename(id: string, title: string) {

@@ -296,7 +296,7 @@ function BinderNode({
         ) : (
           <button
             type="button"
-            onClick={() => (node.type === "SCENE" ? handlers.onSelect(node.id) : setExpanded((e) => !e))}
+            onClick={() => (node.scene ? handlers.onSelect(node.id) : setExpanded((e) => !e))}
             onDoubleClick={() => setEditing(true)}
             className="min-w-0 flex-1 truncate text-left"
             title={node.title}
@@ -311,7 +311,7 @@ function BinderNode({
           </span>
         )}
 
-        {node.type === "SCENE" && (
+        {node.scene && (
           <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
             {words}
           </span>

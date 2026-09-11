@@ -47,9 +47,16 @@ function toChapter(node: TreeNode): EpubChapter {
     numbered: node.numbered,
     chapterAuthor: node.chapterAuthor,
     showHeadingOverride: node.showHeadingOverride,
-    scenes: node.children
-      .filter((child) => child.type === "SCENE" && child.scene)
-      .map((child) => ({ id: child.id, content: child.scene!.content })),
+    // A chapter carries its own Scene directly now (Part A of the
+    // 2026-09-11 manuscript-tab rework) -- fall back to the old
+    // walk-the-SCENE-children shape only as a safety net in case this
+    // export runs against a project whose multi-scene chapters haven't
+    // been migrated yet.
+    scenes: node.scene
+      ? [{ id: node.id, content: node.scene.content }]
+      : node.children
+          .filter((child) => child.type === "SCENE" && child.scene)
+          .map((child) => ({ id: child.id, content: child.scene!.content })),
   };
 }
 
