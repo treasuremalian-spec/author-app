@@ -197,7 +197,7 @@ export function SceneEditor({
       <PresenceHeartbeat status={sprinting ? "SPRINTING" : "WRITING"} />
       <SprintPanel onActiveChange={setSprinting} />
       <div className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
-        <p className="truncate font-display text-base font-semibold">{title}</p>
+        <p className="truncate font-display text-base italic">{title}</p>
         <div className="flex shrink-0 items-center gap-3 text-xs">
           <div className="flex flex-col items-end">
             <span
@@ -241,7 +241,7 @@ export function SceneEditor({
       <EditorToolbar editor={editor} projectId={projectId} sceneId={sceneId} />
 
       <div className="flex-1 overflow-y-auto px-6 py-10 sm:px-10">
-        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card px-8 py-10 shadow-sm sm:px-14 sm:py-14">
+        <div className="mx-auto max-w-2xl border border-border bg-card px-8 py-10 shadow-none sm:px-14 sm:py-14">
           <EditorContent editor={editor} />
         </div>
       </div>

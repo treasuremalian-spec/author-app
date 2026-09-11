@@ -102,7 +102,7 @@ export function SceneInspector({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
         Scene details
       </p>
 
@@ -173,7 +173,7 @@ export function SceneInspector({
             onClick={loadVersions}
             className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"
           >
-            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <span className="flex size-6 items-center justify-center border border-border text-foreground">
               <History className="size-3.5" />
             </span>
             Version history
