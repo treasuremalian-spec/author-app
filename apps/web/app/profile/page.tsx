@@ -20,20 +20,23 @@ export default async function ProfilePage({
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 px-6 py-10">
+    <div className="min-h-screen px-6 py-10">
       <PresenceHeartbeat />
       <div className="mx-auto max-w-lg">
         <Link
           href="/library"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          className="mb-6 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
           Back to your library
         </Link>
 
-        <Card>
+        <Card className="shadow-none">
           <CardHeader>
-            <CardTitle>Your profile</CardTitle>
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              Account
+            </span>
+            <CardTitle className="text-2xl font-normal italic">Your profile</CardTitle>
             <CardDescription>This is how other writers will see you.</CardDescription>
           </CardHeader>
           <CardContent>

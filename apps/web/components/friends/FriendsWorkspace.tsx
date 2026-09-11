@@ -114,7 +114,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
     <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="space-y-8">
         <section>
-          <h2 className="mb-3 font-display text-lg font-semibold">Find writers</h2>
+          <h2 className="mb-3 font-display text-lg italic">Find writers</h2>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -135,7 +135,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
             {(trimmedQuery.length >= 2 ? results : []).map((r) => (
               <li
                 key={r.userId}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3"
+                className="flex items-center justify-between gap-3 border border-border p-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <AuthorAvatar avatarUrl={r.avatarUrl} name={r.displayName} />
@@ -174,7 +174,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
         </section>
 
         <section>
-          <h2 className="mb-3 font-display text-lg font-semibold">Your friends ({friends.length})</h2>
+          <h2 className="mb-3 font-display text-lg italic">Your friends ({friends.length})</h2>
           {friends.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No friends yet -- search above to find other writers on Author App.
@@ -184,7 +184,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
               {friends.map((f) => (
                 <li
                   key={f.friendshipId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3"
+                  className="flex items-center justify-between gap-3 border border-border p-3"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <AuthorAvatar avatarUrl={f.avatarUrl} name={f.displayName} />
@@ -219,7 +219,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
 
       <aside className="space-y-6">
         <section>
-          <h2 className="mb-3 font-display text-base font-semibold">
+          <h2 className="mb-3 font-display text-base italic">
             Requests{incoming.length > 0 ? ` (${incoming.length})` : ""}
           </h2>
           {incoming.length === 0 ? (
@@ -227,7 +227,7 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
           ) : (
             <ul className="space-y-2">
               {incoming.map((r) => (
-                <li key={r.friendshipId} className="rounded-lg border border-border bg-background p-3">
+                <li key={r.friendshipId} className="border border-border p-3">
                   <div className="flex items-center gap-3">
                     <AuthorAvatar avatarUrl={r.avatarUrl} name={r.displayName} size="size-8" />
                     <div className="min-w-0">
@@ -266,12 +266,12 @@ export function FriendsWorkspace({ initialFriends, initialIncoming, initialOutgo
 
         {outgoing.length > 0 && (
           <section>
-            <h2 className="mb-3 font-display text-base font-semibold">Sent</h2>
+            <h2 className="mb-3 font-display text-base italic">Sent</h2>
             <ul className="space-y-2">
               {outgoing.map((r) => (
                 <li
                   key={r.friendshipId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3"
+                  className="flex items-center justify-between gap-3 border border-border p-3"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <AuthorAvatar avatarUrl={r.avatarUrl} name={r.displayName} size="size-8" />

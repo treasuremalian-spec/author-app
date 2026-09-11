@@ -103,7 +103,7 @@ function ShelfView({
 
         return (
           <Link key={project.id} href={`/projects/${project.id}`}>
-            <Card className="flex h-full flex-col gap-3 p-5 transition-shadow hover:shadow-md">
+            <Card className="flex h-full flex-col gap-3 p-5 shadow-none transition-colors hover:border-foreground">
               <CoverUploadButton
                 projectId={project.id}
                 coverImageUrl={project.coverImageUrl}
@@ -112,8 +112,8 @@ function ShelfView({
               />
 
               <div className="flex items-start justify-between gap-2">
-                <p className="font-display text-lg font-semibold leading-tight">{project.title}</p>
-                <span className="shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                <p className="font-display text-lg italic leading-tight">{project.title}</p>
+                <span className="shrink-0 border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                   {STATUS_LABEL[project.status] ?? project.status}
                 </span>
               </div>
@@ -143,10 +143,10 @@ function ShelfView({
 
 function ProgressView({ projects }: { projects: LibraryProject[] }) {
   return (
-    <Card className="overflow-x-auto p-0">
+    <Card className="overflow-x-auto p-0 shadow-none">
       <table className="w-full min-w-[760px] text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border text-left text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
             <th className="px-4 py-3">Title</th>
             <th className="px-4 py-3">Goal</th>
             <th className="px-4 py-3">Words written</th>
