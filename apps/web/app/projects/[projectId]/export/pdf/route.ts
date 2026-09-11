@@ -63,6 +63,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     backgroundImageChapterStartSpread: parseBoolParam(searchParams.get("backgroundImageChapterStartSpread")),
     largePrint: parseBoolParam(searchParams.get("largePrint")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
+    includeToc: parseBoolParam(searchParams.get("includeToc")),
   };
 }
 

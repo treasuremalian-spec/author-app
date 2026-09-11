@@ -43,6 +43,11 @@ type NodeWithScene = {
 
 export interface FormatPreviewChapter {
   title: string;
+  /** This chapter's page type (CHAPTER, PROLOGUE, DEDICATION, etc.) --
+   * exposed so the live preview can approximate the print/EPUB Table of
+   * Contents' PAGE_TYPE_IN_TOC scope (see page-types.ts) without a
+   * separate data fetch. */
+  pageType: ManuscriptNodeData["pageType"];
   /** null = follow the book-wide "show chapter titles" print option;
    * true/false = this chapter's own "Show Heading in Book" override. */
   showHeadingOverride: boolean | null;
@@ -165,6 +170,7 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
         numbered: chapter.numbered,
         chapterNumber: previewChapterNumber,
       }),
+      pageType: chapter.pageType,
       showHeadingOverride: chapter.showHeadingOverride,
       chapterAuthor: chapter.chapterAuthor,
       html: sceneHtmls.join('\n<p class="scene-break">⁂</p>\n'),
@@ -177,6 +183,7 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
   if (!previewChapters.some((c) => c.html.trim())) {
     previewChapters.splice(0, previewChapters.length, {
       title: previewChapters[0]?.title || "Chapter 1",
+      pageType: previewChapters[0]?.pageType || "CHAPTER",
       showHeadingOverride: null,
       chapterAuthor: null,
       html: "<p>Start writing to see your book take shape here -- this preview mirrors your manuscript as you format it.</p>",

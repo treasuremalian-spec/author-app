@@ -38,7 +38,8 @@
 
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection, EpubCoverImage } from "./build-epub";
-import { chapterHeadingLabel } from "./page-types";
+import { resolveSections, type ResolvedSection } from "./build-epub";
+import { chapterHeadingLabel, PAGE_TYPE_IN_TOC } from "./page-types";
 import {
   CRIMSON_PRO_REGULAR,
   CRIMSON_PRO_ITALIC,
@@ -136,6 +137,17 @@ export interface PrintOptions {
   indentParagraphs?: boolean;
   /** Body text line-height multiplier. */
   lineSpacing?: number;
+  /** Insert a real Contents page right after the title page, listing
+   * Chapters, Parts, Prologue & Epilogue only (same PAGE_TYPE_IN_TOC scope
+   * as the EPUB export's Contents page -- see build-epub.ts's
+   * contentsXhtml()) with each entry's page number and a real, if
+   * visually invisible, clickable jump-link (same "looks like plain
+   * text, works like a link on screen" convention as the hyperlinks
+   * feature -- see the global "a" rule in buildCss). Author request,
+   * 2026-09-11: "the option to just have on in the pdf" -- opt-in since a
+   * print TOC is a front-matter convention some authors skip, unlike the
+   * EPUB Contents page, which every reader gets automatically. */
+  includeToc?: boolean;
   /** Enlarge the first letter of each chapter's opening paragraph into a drop cap. */
   dropCaps?: boolean;
   /** Force every chapter (and part) to start on a right-hand page, inserting a blank page when needed. */
@@ -219,6 +231,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   mirroredMargins: false,
   indentParagraphs: true,
   lineSpacing: 1.5,
+  includeToc: false,
   dropCaps: false,
   chapterStartsOnRight: false,
   showChapterTitles: true,
@@ -333,6 +346,7 @@ function markChapterFirstParagraph(html: string): string {
 function chapterHtml(
   chapter: EpubChapter,
   chapterNumber: number,
+  id: string,
   ctx: RenderContext | undefined,
   showChapterTitles: boolean,
   backgroundSpreadDataUri: string | null
@@ -389,39 +403,31 @@ function chapterHtml(
     ? `\n  <img class="chapter-bg-spread-right-img" src="${escapeXml(backgroundSpreadDataUri)}" alt=""/>`
     : "";
 
-  return `${spreadVersoHtml}<section class="chapter">${spreadRightImgHtml}
+  // "id" (from resolveSections(), shared with the EPUB build -- see that
+  // function's comment) is this chapter's same-document anchor target for
+  // the print Contents page's jump-links/page-number lookups (both use a
+  // plain "#chapter-N" fragment against this id, resolved by Paged.js's
+  // target-counter() and by the browser's own native in-page navigation).
+  return `${spreadVersoHtml}<section class="chapter" id="${id}">${spreadRightImgHtml}
   <div class="${chapterStartClass}">${titleHtml}
   </div>
   ${markedScenesHtml}
 </section>`;
 }
 
-function partHtml(
-  part: EpubPart,
-  chapterNumberStart: number,
-  ctx: RenderContext | undefined,
-  showChapterTitles: boolean,
-  backgroundSpreadDataUri: string | null
-): { html: string; nextChapterNumber: number } {
-  let chapterNumber = chapterNumberStart;
-  const chaptersHtml = part.chapters
-    .map((chapter) => {
-      const html = chapterHtml(chapter, chapterNumber, ctx, showChapterTitles, backgroundSpreadDataUri);
-      // Only a real chapter advances the auto-number -- a Dedication or
-      // Acknowledgments page inside a part shouldn't bump the next
-      // chapter's number.
-      if (chapter.pageType === "CHAPTER") chapterNumber += 1;
-      return html;
-    })
-    .join("\n");
-
-  const html = `<section class="part-divider">
+// Just the part-divider page's own markup -- its chapters are now
+// separate, sibling entries in resolveSections()'s flat output (walked
+// directly by buildPrintHtml's main loop below, in the same reading
+// order this function used to produce by nesting them inline), so this
+// no longer needs to loop over part.chapters or track/return a
+// next-chapter-number itself the way it did before 2026-09-11's Contents-
+// page refactor -- resolveSections() is now the one place that does that
+// counting, shared with the EPUB build.
+function partDividerHtml(part: EpubPart, id: string): string {
+  return `<section class="part-divider" id="${id}">
   <p class="part-label">Part</p>
   <h1>${escapeXml(part.title)}</h1>
-</section>
-${chaptersHtml}`;
-
-  return { html, nextChapterNumber: chapterNumber };
+</section>`;
 }
 
 /** True if any scene anywhere in the book contains a "spread"-mode
@@ -1158,6 +1164,79 @@ ${
   text-indent: 0;
 }
 
+/* Contents page (PrintOptions.includeToc, 2026-09-11) -- same "own fresh
+   page, respects chapterStartsOnRight" placement rule as .part-divider
+   above, immediately after the title page. Not given the "titlepage"
+   named page (unlike .titlepage/.part-divider) -- it's meant to read as
+   an ordinary front-matter page, with a normal running page number of
+   its own at the bottom, not a special centered title-style page. */
+.contents-page {
+  break-before: ${chapterBreak};
+  break-after: page;
+  padding-top: 0.3in;
+}
+.contents-page h1 {
+  font-size: 20pt;
+  font-weight: normal;
+  text-align: center;
+  text-indent: 0;
+  margin: 0 0 0.5in;
+}
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.toc-part-chapters {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.35in;
+}
+/* Each row is its title/leader/page-number laid out as one line -- a
+   real Vellum-style dotted leader between the title and its page number,
+   not just two numbers side by side. */
+.toc-row {
+  display: flex;
+  align-items: baseline;
+  margin: 0.5em 0;
+  text-indent: 0;
+}
+.toc-part-row {
+  margin-top: 0.9em;
+}
+.toc-part-row .toc-title {
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.92em;
+}
+.toc-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toc-leader {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted #999;
+  margin: 0 0.4em 0.2em;
+}
+.toc-pagenum {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: #444;
+}
+/* The actual page-number lookup -- see printTocRowContent's comment in
+   this file for why "data-toc-target" (not "href") is what carries the
+   fragment id here, and confirmed against Paged.js's real
+   target-counter() implementation before shipping, not just written from
+   the CSS Generated Content spec's text (see the print TOC feature's
+   verification notes in project memory). */
+.toc-pagenum::after {
+  content: target-counter(attr(data-toc-target), page);
+}
+
 .chapter-start {
   /* No "page: <name>" here on purpose (see the comment above the removed
      @page chapterstart rule) -- this break-before is now the ONLY thing
@@ -1229,6 +1308,95 @@ export interface PrintDocument {
   pageHeightIn: number;
 }
 
+interface PrintTocGroup {
+  partTitle: string | null; // null = chapters that aren't under any Part
+  partId: string | null;
+  chapters: { id: string; title: string }[];
+}
+
+// Print's own version of build-epub.ts's buildTocGroups() -- same
+// PAGE_TYPE_IN_TOC scope and "group under the most recently seen Part"
+// rule (so the two Contents pages can never disagree on WHICH chapters
+// are TOC-worthy), but grouping same-document anchor ids instead of
+// separate EPUB files, since print-html.ts is one flat document. Not
+// merged into one shared function with buildTocGroups() -- the only
+// difference is href-shape (an id vs. a filename), and resolveSections()
+// above is already the one place that would matter if it drifted.
+function buildPrintTocGroups(resolved: ResolvedSection[]): PrintTocGroup[] {
+  const groups: PrintTocGroup[] = [];
+  let current: PrintTocGroup = { partTitle: null, partId: null, chapters: [] };
+  groups.push(current);
+
+  for (const item of resolved) {
+    if (item.kind === "part") {
+      current = { partTitle: item.title, partId: item.id, chapters: [] };
+      groups.push(current);
+    } else if (PAGE_TYPE_IN_TOC[item.pageType!]) {
+      current.chapters.push({ id: item.id, title: item.title });
+    }
+  }
+
+  return groups.filter((g) => g.chapters.length > 0);
+}
+
+// One Contents-page row's INNER markup (not the <li> wrapper -- see
+// printTocHtml below for why that's the caller's job): title on the
+// left, a dotted leader, and the entry's real printed page number on the
+// right, the standard print-book TOC layout. The row's own
+// <a href="#..."> both makes the title text a real (if visually
+// invisible, see the global "a" rule in buildCss) clickable jump-link AND
+// is what target-counter() below reads its target page from.
+//
+// The page number is a SEPARATE element from the link (rather than
+// content injected via the link's own ::after) carrying its own
+// "data-toc-target" copy of the same href -- confirmed necessary via
+// Paged.js's real target-counter() implementation (node_modules/pagedjs/
+// src/modules/generated-content/target-counters.js): it resolves
+// target-counter(attr(X), page) by reading attribute X off the exact
+// element the CSS rule's selector matches, so the element showing the
+// number needs that attribute directly on itself, not inherited from a
+// sibling/ancestor.
+function printTocRowContent(id: string, title: string): string {
+  const href = `#${id}`;
+  return `<a class="toc-title" href="${href}">${escapeXml(title)}</a>
+        <span class="toc-leader"></span>
+        <span class="toc-pagenum" data-toc-target="${href}"></span>`;
+}
+
+function printTocHtml(groups: PrintTocGroup[]): string {
+  const body = groups
+    .map((g) => {
+      const items = g.chapters
+        .map((c) => `      <li class="toc-row toc-chapter-row">
+        ${printTocRowContent(c.id, c.title)}
+      </li>`)
+        .join("\n");
+      if (g.partTitle === null) return items;
+      // A part heading is its own top-level <li> (not nested inside
+      // another <li> -- an <li> may contain a nested <ol>, but never
+      // another <li> directly without one), immediately followed by a
+      // sibling <li> that holds the nested <ol> of that part's chapters --
+      // mirrors real, valid HTML list nesting rather than the shape
+      // that's easiest to describe in prose.
+      return `      <li class="toc-row toc-part-row">
+        ${printTocRowContent(g.partId!, g.partTitle)}
+      </li>
+      <li class="toc-part-chapters-item">
+        <ol class="toc-part-chapters">
+${items}
+        </ol>
+      </li>`;
+    })
+    .join("\n");
+
+  return `<section class="contents-page" id="contents">
+  <h1>Contents</h1>
+  <ol class="toc-list">
+${body}
+  </ol>
+</section>`;
+}
+
 /** Builds the full print-ready HTML document Paged.js will paginate. */
 export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {}): PrintDocument {
   // Merge field-by-field with ?? rather than a blanket object spread --
@@ -1240,6 +1408,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     mirroredMargins: options.mirroredMargins ?? DEFAULT_PRINT_OPTIONS.mirroredMargins,
     indentParagraphs: options.indentParagraphs ?? DEFAULT_PRINT_OPTIONS.indentParagraphs,
     lineSpacing: options.lineSpacing ?? DEFAULT_PRINT_OPTIONS.lineSpacing,
+    includeToc: options.includeToc ?? DEFAULT_PRINT_OPTIONS.includeToc,
     dropCaps: options.dropCaps ?? DEFAULT_PRINT_OPTIONS.dropCaps,
     chapterStartsOnRight: options.chapterStartsOnRight ?? DEFAULT_PRINT_OPTIONS.chapterStartsOnRight,
     showChapterTitles: options.showChapterTitles ?? DEFAULT_PRINT_OPTIONS.showChapterTitles,
@@ -1302,19 +1471,22 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
       ? backgroundImageDataUri
       : null;
 
-  let chapterNumber = 1;
-  const sectionsHtml = book.sections
-    .map((section: EpubSection) => {
-      if (section.kind === "part") {
-        const result = partHtml(section.part, chapterNumber, ctx, resolved.showChapterTitles, backgroundSpreadDataUri);
-        chapterNumber = result.nextChapterNumber;
-        return result.html;
-      }
-      const html = chapterHtml(section.chapter, chapterNumber, ctx, resolved.showChapterTitles, backgroundSpreadDataUri);
-      if (section.chapter.pageType === "CHAPTER") chapterNumber += 1;
-      return html;
-    })
+  // resolveSections() (shared with the EPUB build -- see its own comment
+  // in build-epub.ts) does all the chapter/part numbering and heading-
+  // label work in one flat, ordered pass; the loop below just turns each
+  // resolved item into its HTML, in the same order partHtml's old nested
+  // version used to produce by walking part.chapters inline.
+  const resolvedSections = resolveSections(book.sections);
+  const sectionsHtml = resolvedSections
+    .map((item) =>
+      item.kind === "part"
+        ? partDividerHtml(item.part!, item.id)
+        : chapterHtml(item.chapter!, item.chapterNumber, item.id, ctx, resolved.showChapterTitles, backgroundSpreadDataUri)
+    )
     .join("\n");
+
+  const tocGroups = resolved.includeToc ? buildPrintTocGroups(resolvedSections) : [];
+  const tocHtml = tocGroups.length > 0 ? printTocHtml(tocGroups) : "";
 
   const html = `<!DOCTYPE html>
 <html lang="${book.language || "en"}">
@@ -1328,6 +1500,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
   <h1>${escapeXml(book.title)}</h1>
   <p class="byline">${escapeXml(book.author)}</p>
 </section>
+${tocHtml}
 ${sectionsHtml}
 </body>
 </html>`;

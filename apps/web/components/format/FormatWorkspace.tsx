@@ -26,6 +26,11 @@ interface PrintOptionsState {
   dropCaps: boolean;
   chapterStartsOnRight: boolean;
   showChapterTitles: boolean;
+  /** Inserts a real Contents page right after the title page, listing
+   * Chapters/Parts/Prologue/Epilogue with page numbers and clickable
+   * jump-links -- see PrintOptions.includeToc in print-html.ts. PDF-only
+   * by author request (2026-09-11): the EPUB export always gets one. */
+  includeToc: boolean;
   lineSpacing: string;
   /** "none" (default), "every_page", or "chapter_start" -- see
    * PrintOptions.backgroundImageMode in print-html.ts. Has no visible
@@ -71,6 +76,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   dropCaps: false,
   chapterStartsOnRight: false,
   showChapterTitles: true,
+  includeToc: false,
   lineSpacing: "1.5",
   backgroundImageMode: "none",
   backgroundImageTextColor: "dark",
@@ -86,6 +92,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     dropCaps: options.dropCaps ? "1" : "0",
     chapterStartsOnRight: options.chapterStartsOnRight ? "1" : "0",
     showChapterTitles: options.showChapterTitles ? "1" : "0",
+    includeToc: options.includeToc ? "1" : "0",
     lineSpacing: options.lineSpacing,
     backgroundImageMode: options.backgroundImageMode,
     backgroundImageTextColor: options.backgroundImageTextColor,
@@ -198,6 +205,16 @@ export function FormatWorkspace({
                     onChange={() => toggle("showChapterTitles")}
                   />
                   Show chapter titles (each chapter still starts on its own page when off)
+                </label>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 border-input"
+                    checked={options.includeToc}
+                    onChange={() => toggle("includeToc")}
+                  />
+                  Include a Table of Contents page (Chapters, Parts, Prologue &amp; Epilogue only)
                 </label>
 
                 <div className="border-t pt-2.5 mt-1">
@@ -378,6 +395,7 @@ export function FormatWorkspace({
             backgroundImageTextColor: options.backgroundImageTextColor,
             backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread,
             largePrint: options.largePrint,
+            includeToc: options.includeToc,
           }}
         />
       </div>

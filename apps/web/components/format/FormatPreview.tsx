@@ -23,6 +23,7 @@
 
 import type { CSSProperties } from "react";
 import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "@author-app/formatting-engine/trim-sizes";
+import { PAGE_TYPE_IN_TOC } from "@author-app/formatting-engine/page-types";
 import type { FormatPreviewData } from "@/lib/actions/format";
 
 export interface PreviewOptions {
@@ -81,6 +82,13 @@ export interface PreviewOptions {
    * body wrapper) scale automatically along with it, same as in the real
    * PDF. */
   largePrint: boolean;
+  /** Mirrors PrintOptions.includeToc (print-html.ts). This preview has no
+   * real pagination (see the file comment above), so it can't show real
+   * page numbers or group entries under their Part the way the real PDF
+   * does -- it shows an honest, simpler stand-in instead: a flat list of
+   * TOC-eligible chapter titles (same PAGE_TYPE_IN_TOC scope as the real
+   * export), with no page numbers, right before the manuscript content. */
+  includeToc: boolean;
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -162,6 +170,18 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
         style={pageStyle}
       >
         <div className="format-preview-page">
+          {data && options.includeToc && (
+            <section className="format-preview-page__toc">
+              <h1 className="format-preview-page__title">Contents</h1>
+              <ol className="format-preview-page__toc-list">
+                {chapters
+                  .filter((chapter) => PAGE_TYPE_IN_TOC[chapter.pageType])
+                  .map((chapter, index) => (
+                    <li key={index}>{chapter.title}</li>
+                  ))}
+              </ol>
+            </section>
+          )}
           {data ? (
             chapters.map((chapter, index) => {
               const showHeading = chapter.showHeadingOverride ?? options.showChapterTitles;
@@ -255,6 +275,20 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           font-style: italic;
           font-size: 0.75em;
           margin: -1em 0 1.4em;
+        }
+        .format-preview-page__toc {
+          text-align: center;
+          margin: 0 0 2.6em;
+          padding-bottom: 2em;
+          border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
+        }
+        .format-preview-page__toc-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+        }
+        .format-preview-page__toc-list li {
+          margin: 0.6em 0;
         }
         .format-preview-page__chapter-start-band {
           position: relative;

@@ -83,7 +83,7 @@ interface NavEntry {
 // page (which must be written into the spine BEFORE any chapter content)
 // know every chapter's real filename and heading without a fragile
 // "guess what addChapter will generate" scheme. See resolveSections().
-interface ResolvedSection {
+export interface ResolvedSection {
   kind: "part" | "chapter";
   id: string;
   filename: string;
@@ -175,7 +175,15 @@ const EPUB_TYPE_BY_PAGE_TYPE: Partial<Record<PageType, string>> = {
 // sequential counter (not tied to manifest.length, which also grows from
 // unrelated inline images) specifically so they're fully predictable
 // ahead of the real write loop.
-function resolveSections(sections: EpubSection[]): ResolvedSection[] {
+//
+// Exported (2026-09-11) so print-html.ts's own Contents-page feature can
+// call this SAME function for its chapter/part numbering and heading
+// labels -- the "id" field it returns (e.g. "chapter-3", filename-
+// extension-free) doubles as a same-document anchor id for print's flat
+// HTML, so the two export formats can never disagree on what chapter
+// number or heading text a given chapter gets, even though each builds
+// its own TOC grouping/HTML around this shared numbering.
+export function resolveSections(sections: EpubSection[]): ResolvedSection[] {
   const resolved: ResolvedSection[] = [];
   let partNumber = 0;
   let chapterNumber = 0;
