@@ -108,7 +108,14 @@ export async function listChapters(projectId: string) {
     select: { id: true, parentId: true, type: true, title: true, orderIndex: true },
   });
 
-  return nodes;
+  // The `where` filter above guarantees every row is PART or CHAPTER at
+  // runtime, but Prisma's return type still widens `type` to the full
+  // ManuscriptNodeType enum (it can't narrow from a `where` clause) --
+  // the real generated client on Vercel enforces this strictly (unlike
+  // the local dev stub, which types everything loosely and let this
+  // slip past `tsc` locally, confirmed 2026-09-11 after it broke the
+  // real build). Cast to the narrower shape SceneCardsPanel.tsx expects.
+  return nodes as (Omit<(typeof nodes)[number], "type"> & { type: "PART" | "CHAPTER" })[];
 }
 
 export async function createNode(input: {
