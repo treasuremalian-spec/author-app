@@ -103,7 +103,7 @@ export function CharactersPanel({
                       : "border-transparent hover:bg-background/80"
                   )}
                 >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <span className="flex size-7 shrink-0 items-center justify-center border border-border text-foreground">
                     <User className="size-3.5" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -201,7 +201,7 @@ function CharacterDetail({
           value={character.name}
           onChange={(e) => set("name", e.target.value)}
           placeholder="Character name"
-          className="min-w-0 flex-1 bg-transparent font-display text-2xl font-semibold outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent font-display text-2xl italic outline-none placeholder:text-muted-foreground"
         />
         <span className="shrink-0 text-xs text-muted-foreground">
           {status === "saving" ? "Saving…" : "Saved"}
@@ -217,7 +217,7 @@ function CharacterDetail({
 
       <div className="space-y-6">
         <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Basics</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Basics</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nickname" value={character.nickname ?? ""} onChange={(v) => set("nickname", v)} />
             <Field label="Occupation" value={character.occupation ?? ""} onChange={(v) => set("occupation", v)} />
@@ -227,7 +227,7 @@ function CharacterDetail({
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
             Appearance &amp; personality
           </p>
           <Field label="Appearance" value={character.appearance ?? ""} onChange={(v) => set("appearance", v)} multiline />
@@ -236,7 +236,7 @@ function CharacterDetail({
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Story role</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Story role</p>
           <Field label="Goals" value={character.goals ?? ""} onChange={(v) => set("goals", v)} multiline />
           <Field label="Motivation" value={character.motivation ?? ""} onChange={(v) => set("motivation", v)} multiline />
           <Field label="Fears" value={character.fears ?? ""} onChange={(v) => set("fears", v)} multiline />
@@ -246,7 +246,7 @@ function CharacterDetail({
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
             Family &amp; backstory
           </p>
           <Field label="Family" value={character.family ?? ""} onChange={(v) => set("family", v)} multiline />
@@ -254,7 +254,7 @@ function CharacterDetail({
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Notes</p>
           <Field label="Notes" value={character.notes ?? ""} onChange={(v) => set("notes", v)} multiline />
         </section>
       </div>

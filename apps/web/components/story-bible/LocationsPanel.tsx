@@ -101,7 +101,7 @@ export function LocationsPanel({
                       : "border-transparent hover:bg-background/80"
                   )}
                 >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-foreground">
+                  <span className="flex size-7 shrink-0 items-center justify-center border border-border text-foreground">
                     <MapPin className="size-3.5" />
                   </span>
                   <span className="min-w-0 flex-1 truncate">{l.name || "Unnamed"}</span>
@@ -188,7 +188,7 @@ function LocationDetail({
           value={location.name}
           onChange={(e) => set("name", e.target.value)}
           placeholder="Location name"
-          className="min-w-0 flex-1 bg-transparent font-display text-2xl font-semibold outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent font-display text-2xl italic outline-none placeholder:text-muted-foreground"
         />
         <span className="shrink-0 text-xs text-muted-foreground">
           {status === "saving" ? "Saving…" : "Saved"}
@@ -204,7 +204,7 @@ function LocationDetail({
 
       <div className="space-y-6">
         <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">At a glance</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">At a glance</p>
           <div className="space-y-1.5">
             <Label>Description</Label>
             <Textarea
@@ -226,7 +226,7 @@ function LocationDetail({
         </section>
 
         <section className="space-y-3 border-t border-border pt-5">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
             <Globe2 className="size-3.5" /> Worldbuilding
           </p>
           {LOCATION_WORLDBUILDING_SECTIONS.map((section) => (

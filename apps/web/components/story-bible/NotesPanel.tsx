@@ -93,7 +93,7 @@ export function NotesPanel({
                       : "border-transparent hover:bg-background/80"
                   )}
                 >
-                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-foreground">
+                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center border border-border text-foreground">
                     <BookMarked className="size-3.5" />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -188,7 +188,7 @@ function NoteDetail({
           value={note.title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Note title"
-          className="min-w-0 flex-1 bg-transparent font-display text-2xl font-semibold outline-none placeholder:text-muted-foreground"
+          className="min-w-0 flex-1 bg-transparent font-display text-2xl italic outline-none placeholder:text-muted-foreground"
         />
         <span className="shrink-0 text-xs text-muted-foreground">
           {status === "saving" ? "Saving…" : "Saved"}

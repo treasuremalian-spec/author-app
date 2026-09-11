@@ -31,22 +31,22 @@ export function StoryBibleWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-border bg-card px-4 py-2">
+      <div className="flex h-11 items-center gap-6 border-b border-border bg-card px-4">
         {tabs.map(({ id, label, icon: Icon, count }) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              "flex h-full items-center gap-1.5 border-b-2 text-[10px] font-bold uppercase tracking-[0.15em] transition-colors",
               tab === id
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             <Icon className="size-3.5" />
             {label}
-            {count > 0 && <span className="text-xs text-muted-foreground">{count}</span>}
+            {count > 0 && <span className="font-mono text-muted-foreground">{count}</span>}
           </button>
         ))}
       </div>
