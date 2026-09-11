@@ -16,7 +16,7 @@ export function ProjectNavTabs({ projectId }: { projectId: string }) {
   ];
 
   return (
-    <nav className="ml-2 flex items-center gap-1">
+    <nav className="ml-2 flex h-8 items-center gap-5">
       {tabs.map((tab) => {
         const active =
           tab.label === "Write" ? pathname === tab.href : pathname.startsWith(tab.href);
@@ -25,10 +25,10 @@ export function ProjectNavTabs({ projectId }: { projectId: string }) {
             key={tab.href}
             href={tab.href}
             className={cn(
-              "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              "flex h-full items-center border-b-2 text-[10px] font-bold uppercase tracking-[0.15em] transition-colors",
               active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
             {tab.label}

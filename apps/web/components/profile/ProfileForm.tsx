@@ -40,20 +40,20 @@ export function ProfileForm({
           onAvatarChange={setAvatarUrl}
         />
         <div>
-          <p className="font-display text-lg font-semibold">{currentDisplayName || username}</p>
+          <p className="font-display text-lg italic">{currentDisplayName || username}</p>
           <p className="text-sm text-muted-foreground">@{username}</p>
         </div>
       </div>
 
       <form action={updateMyProfile} className="space-y-4">
         {error && (
-          <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+          <p className="border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>
         )}
         {saved && (
-          <p className="rounded-lg bg-primary/10 p-3 text-sm text-primary">Profile updated.</p>
+          <p className="border border-primary/30 bg-primary/5 p-3 text-sm text-primary">Profile updated.</p>
         )}
         <div className="space-y-1.5">
-          <Label htmlFor="displayName">Display name</Label>
+          <Label htmlFor="displayName" className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Display name</Label>
           <Input
             id="displayName"
             name="displayName"
@@ -63,17 +63,17 @@ export function ProfileForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Username</Label>
-          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Username</Label>
+          <p className="border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             @{username}
           </p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="genres">Genres you write (comma-separated)</Label>
+          <Label htmlFor="genres" className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Genres you write (comma-separated)</Label>
           <Input id="genres" name="genres" defaultValue={genres.join(", ")} placeholder="Urban fiction, Dark romance" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="bio">Short bio</Label>
+          <Label htmlFor="bio" className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Short bio</Label>
           <Textarea
             id="bio"
             name="bio"
@@ -82,7 +82,7 @@ export function ProfileForm({
             placeholder="Tell your writing circle a little about you and what you write."
           />
         </div>
-        <Button type="submit">Save changes</Button>
+        <Button type="submit" className="text-xs font-bold uppercase tracking-[0.15em]">Save changes</Button>
       </form>
     </div>
   );

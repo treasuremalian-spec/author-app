@@ -21,7 +21,7 @@ function SprintCard({
   joining: boolean;
 }) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-4">
+    <li className="flex items-center justify-between gap-3 border border-border p-4">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{sprint.creatorDisplayName}&rsquo;s sprint</p>
         <p className="text-xs text-muted-foreground">
@@ -90,7 +90,7 @@ export function SprintsWorkspace({ initialMySprints, initialPublicSprints, frien
       </div>
 
       <section>
-        <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold">
+        <h2 className="mb-3 flex items-center gap-2 font-display text-lg italic">
           <Users className="size-4" />
           Your sprints
         </h2>
@@ -108,7 +108,7 @@ export function SprintsWorkspace({ initialMySprints, initialPublicSprints, frien
       </section>
 
       <section>
-        <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold">
+        <h2 className="mb-3 flex items-center gap-2 font-display text-lg italic">
           <Globe className="size-4" />
           Public sprints
         </h2>

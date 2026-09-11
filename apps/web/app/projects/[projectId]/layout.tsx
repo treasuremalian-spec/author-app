@@ -16,19 +16,18 @@ export default async function ProjectLayout({
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="relative flex items-center gap-3 border-b border-border bg-card px-4 py-3">
+      <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3">
         <Link
           href="/library"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex size-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
         </Link>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <BookOpen className="size-4" />
+        <div className="flex size-8 shrink-0 items-center justify-center border border-border text-foreground">
+          <BookOpen className="size-4" strokeWidth={1.5} />
         </div>
-        <p className="truncate font-display text-base font-semibold">{project.title}</p>
+        <p className="truncate font-display text-base italic">{project.title}</p>
         <ProjectNavTabs projectId={project.id} />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-primary/40 via-accent/40 to-transparent" />
       </header>
 
       <div className="min-h-0 flex-1">{children}</div>
