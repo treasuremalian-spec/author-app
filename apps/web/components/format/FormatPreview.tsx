@@ -163,7 +163,12 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
       >
         <div className="format-preview-page">
           {data ? (
-            chapters.map((chapter, index) => (
+            chapters.map((chapter, index) => {
+              const showHeading = chapter.showHeadingOverride ?? options.showChapterTitles;
+              const authorLine = chapter.chapterAuthor?.trim() ? (
+                <p className="format-preview-page__author">by {chapter.chapterAuthor.trim()}</p>
+              ) : null;
+              return (
               <section key={index} className={`format-preview-page__chapter${index > 0 ? " format-preview-page__chapter--break" : ""}`}>
                 {showChapterStartBackground ? (
                   <div
@@ -187,17 +192,25 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                       backgroundImage: `url(${options.backgroundImageUrl})`,
                     }}
                   >
-                    {options.showChapterTitles && (
-                      <h1
-                        className="format-preview-page__title format-preview-page__title--on-band"
-                        style={options.backgroundImageTextColor === "light" ? { color: "#fff" } : undefined}
-                      >
-                        {chapter.title}
-                      </h1>
+                    {showHeading && (
+                      <>
+                        <h1
+                          className="format-preview-page__title format-preview-page__title--on-band"
+                          style={options.backgroundImageTextColor === "light" ? { color: "#fff" } : undefined}
+                        >
+                          {chapter.title}
+                        </h1>
+                        {authorLine}
+                      </>
                     )}
                   </div>
                 ) : (
-                  options.showChapterTitles && <h1 className="format-preview-page__title">{chapter.title}</h1>
+                  showHeading && (
+                    <>
+                      <h1 className="format-preview-page__title">{chapter.title}</h1>
+                      {authorLine}
+                    </>
+                  )
                 )}
                 <div
                   className={`format-preview-page__body${options.dropCaps ? " format-preview-page__body--drop-cap" : ""}${
@@ -207,7 +220,8 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                   dangerouslySetInnerHTML={{ __html: chapter.html }}
                 />
               </section>
-            ))
+              );
+            })
           ) : (
             <p className="format-preview-page__body">Loading preview...</p>
           )}
@@ -235,6 +249,12 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           letter-spacing: 0.04em;
           font-size: 1.6em;
           margin: 0 0 1.4em;
+        }
+        .format-preview-page__author {
+          text-align: center;
+          font-style: italic;
+          font-size: 0.75em;
+          margin: -1em 0 1.4em;
         }
         .format-preview-page__chapter-start-band {
           position: relative;

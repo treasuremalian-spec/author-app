@@ -23,6 +23,7 @@
 
 import { prisma } from "@author-app/database";
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, type RenderContext } from "@author-app/formatting-engine";
+import { chapterHeadingLabel } from "@author-app/formatting-engine/page-types";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
 import { buildTree, type ManuscriptNodeData } from "@/lib/manuscript-tree";
 
@@ -33,11 +34,20 @@ type NodeWithScene = {
   type: "PART" | "CHAPTER" | "SCENE";
   title: string;
   orderIndex: number;
+  pageType: ManuscriptNodeData["pageType"];
+  numbered: boolean;
+  chapterAuthor: string | null;
+  showHeadingOverride: boolean | null;
   scene: { id: string; content: unknown } | null;
 };
 
 export interface FormatPreviewChapter {
   title: string;
+  /** null = follow the book-wide "show chapter titles" print option;
+   * true/false = this chapter's own "Show Heading in Book" override. */
+  showHeadingOverride: boolean | null;
+  /** "Add Chapter Author" byline, if set. */
+  chapterAuthor: string | null;
   /** Pre-rendered XHTML of this chapter's non-empty scenes -- image src
    * attributes are left as their real Supabase Storage public URLs (see
    * the file comment above), so the browser fetches them directly rather
@@ -94,6 +104,10 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
     type: n.type,
     title: n.title,
     orderIndex: n.orderIndex,
+    pageType: n.pageType,
+    numbered: n.numbered,
+    chapterAuthor: n.chapterAuthor,
+    showHeadingOverride: n.showHeadingOverride,
     scene: n.scene
       ? {
           id: n.scene.id,
@@ -134,12 +148,25 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
     }
   }
 
-  const previewChapters: FormatPreviewChapter[] = chapters.map((chapter, index) => {
+  // Mirrors the real export renderers' chapter-numbering rule exactly
+  // (see chapterHeadingLabel() in page-types.ts): only a plain, unconverted
+  // Chapter node advances the auto-number, so a front-/back-matter page
+  // sitting between two chapters doesn't shift the numbers that follow it.
+  let previewChapterNumber = 0;
+  const previewChapters: FormatPreviewChapter[] = chapters.map((chapter) => {
+    if (chapter.pageType === "CHAPTER") previewChapterNumber += 1;
     const sceneHtmls = chapter.children
       .filter((s) => s.scene && !isSceneContentEmpty(s.scene.content))
       .map((s) => sceneContentToXhtml(s.scene!.content, PASSTHROUGH_IMAGE_CTX));
     return {
-      title: chapter.title?.trim() || `Chapter ${index + 1}`,
+      title: chapterHeadingLabel({
+        pageType: chapter.pageType,
+        title: chapter.title,
+        numbered: chapter.numbered,
+        chapterNumber: previewChapterNumber,
+      }),
+      showHeadingOverride: chapter.showHeadingOverride,
+      chapterAuthor: chapter.chapterAuthor,
       html: sceneHtmls.join('\n<p class="scene-break">⁂</p>\n'),
     };
   });
@@ -149,7 +176,9 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
   // empty headings.
   if (!previewChapters.some((c) => c.html.trim())) {
     previewChapters.splice(0, previewChapters.length, {
-      title: previewChapters[0]?.title || "Chapter One",
+      title: previewChapters[0]?.title || "Chapter 1",
+      showHeadingOverride: null,
+      chapterAuthor: null,
       html: "<p>Start writing to see your book take shape here -- this preview mirrors your manuscript as you format it.</p>",
     });
   }

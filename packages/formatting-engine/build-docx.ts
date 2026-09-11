@@ -36,7 +36,8 @@ import {
   convertInchesToTwip,
 } from "docx";
 import type { DocNode } from "./tiptap-to-xhtml";
-import type { EpubSection, EpubSection as _EpubSection } from "./build-epub";
+import type { EpubChapter, EpubSection, EpubSection as _EpubSection } from "./build-epub";
+import { chapterHeadingLabel } from "./page-types";
 
 export interface DocxBookInput {
   title: string;
@@ -179,7 +180,17 @@ function chapterHeading(label: string): Paragraph {
   return new Paragraph({
     children: [new PageBreak(), new TextRun({ text: label, font: FONT, size: FONT_SIZE_HALF_POINTS, bold: true })],
     alignment: AlignmentType.CENTER,
-    spacing: { before: convertInchesToTwip(1.5), after: 480 },
+    spacing: { before: convertInchesToTwip(1.5), after: label ? 240 : 480 },
+  });
+}
+
+/** The per-chapter byline paragraph ("Add Chapter Author"), directly
+ * under chapterHeading -- for multi-author anthologies/collections. */
+function chapterAuthorLine(name: string): Paragraph {
+  return new Paragraph({
+    children: [new TextRun({ text: `by ${name}`, font: FONT, size: FONT_SIZE_HALF_POINTS, italics: true })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 480 },
   });
 }
 
@@ -234,12 +245,33 @@ export async function buildManuscriptDocx(book: DocxBookInput): Promise<Buffer> 
   );
 
   let chapterNumber = 0;
+
+  function pushChapterHeading(chapter: EpubChapter) {
+    if (chapter.pageType === "CHAPTER") chapterNumber += 1;
+    const label = chapterHeadingLabel({
+      pageType: chapter.pageType,
+      title: chapter.title,
+      numbered: chapter.numbered,
+      chapterNumber,
+    });
+    // No book-wide "show chapter titles" setting exists for this format
+    // (Standard Manuscript Format always shows them) -- only an explicit
+    // per-chapter override can suppress one.
+    const showHeading = (chapter.showHeadingOverride ?? true) && !!label;
+    if (showHeading) {
+      bodyChildren.push(chapterHeading(label));
+      if (chapter.chapterAuthor?.trim()) bodyChildren.push(chapterAuthorLine(chapter.chapterAuthor.trim()));
+    } else {
+      // Still needs its own fresh page even with the heading hidden.
+      bodyChildren.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+  }
+
   for (const section of book.sections) {
     if (section.kind === "part") {
       bodyChildren.push(partHeading(section.part.title));
       for (const chapter of section.part.chapters) {
-        chapterNumber += 1;
-        bodyChildren.push(chapterHeading(chapter.title?.trim() || `Chapter ${chapterNumber}`));
+        pushChapterHeading(chapter);
         let seenFirstScene = false;
         for (const scene of chapter.scenes) {
           if (isSceneEmpty(scene.content)) continue;
@@ -249,8 +281,7 @@ export async function buildManuscriptDocx(book: DocxBookInput): Promise<Buffer> 
         }
       }
     } else {
-      chapterNumber += 1;
-      bodyChildren.push(chapterHeading(section.chapter.title?.trim() || `Chapter ${chapterNumber}`));
+      pushChapterHeading(section.chapter);
       let seenFirstScene = false;
       for (const scene of section.chapter.scenes) {
         if (isSceneEmpty(scene.content)) continue;

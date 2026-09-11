@@ -21,6 +21,10 @@ type NodeWithScene = {
   type: "PART" | "CHAPTER" | "SCENE";
   title: string;
   orderIndex: number;
+  pageType: ManuscriptNodeData["pageType"];
+  numbered: boolean;
+  chapterAuthor: string | null;
+  showHeadingOverride: boolean | null;
   scene: {
     id: string;
     content: unknown;
@@ -30,7 +34,19 @@ type NodeWithScene = {
 function toChapter(node: TreeNode): EpubChapter {
   return {
     id: node.id,
-    title: node.title || "Chapter",
+    // Deliberately the RAW title, blank included -- it used to be
+    // pre-filled with the literal word "Chapter" here, which silently
+    // defeated every renderer's own "title, or Chapter <n> if blank"
+    // fallback (chapter.title was never actually falsy by the time it
+    // got there, so an untitled chapter printed as just "Chapter", with
+    // no number, in every export). Fixed 2026-09-11 while wiring up page
+    // types -- see chapterHeadingLabel() in page-types.ts, now the one
+    // place that fallback happens.
+    title: node.title,
+    pageType: node.pageType,
+    numbered: node.numbered,
+    chapterAuthor: node.chapterAuthor,
+    showHeadingOverride: node.showHeadingOverride,
     scenes: node.children
       .filter((child) => child.type === "SCENE" && child.scene)
       .map((child) => ({ id: child.id, content: child.scene!.content })),
@@ -132,6 +148,10 @@ export async function loadBookForExport(projectId: string): Promise<BookForExpor
     type: n.type,
     title: n.title,
     orderIndex: n.orderIndex,
+    pageType: n.pageType,
+    numbered: n.numbered,
+    chapterAuthor: n.chapterAuthor,
+    showHeadingOverride: n.showHeadingOverride,
     scene: n.scene
       ? {
           id: n.scene.id,

@@ -3,6 +3,17 @@
 // render, plus the small bits of math (word counts, tree order) that both
 // the binder and the editor need.
 
+// Re-exported from the formatting-engine package (subpath import, same
+// reasoning as trim-sizes.ts -- see that file's comment) so the Binder's
+// "Convert To" menu and every export renderer share one vocabulary
+// instead of two copies drifting apart.
+export {
+  type PageType,
+  PAGE_TYPE_LABELS,
+  CONVERT_TO_PAGE_TYPES,
+} from "@author-app/formatting-engine/page-types";
+import type { PageType } from "@author-app/formatting-engine/page-types";
+
 export type NodeType = "PART" | "CHAPTER" | "SCENE";
 export type SceneStatusValue = "PLANNED" | "DRAFTING" | "WRITTEN" | "REVISING" | "COMPLETE";
 
@@ -28,6 +39,14 @@ export interface ManuscriptNodeData {
   type: NodeType;
   title: string;
   orderIndex: number;
+  // "Convert To" page type + related per-chapter options (2026-09-11,
+  // Phase 16) -- meaningful only when type === "CHAPTER"; PART/SCENE rows
+  // just carry the defaults, unused. See page-types.ts's chapterHeadingLabel()
+  // for exactly how these combine into what prints in an exported book.
+  pageType: PageType;
+  numbered: boolean;
+  chapterAuthor: string | null;
+  showHeadingOverride: boolean | null;
   scene: SceneData | null;
 }
 

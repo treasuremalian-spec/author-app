@@ -228,6 +228,30 @@ enum ManuscriptNodeType {
   SCENE
 }
 
+// The Vellum-style "Convert To" page type for a chapter-level node -- see
+// packages/formatting-engine/page-types.ts (the single source of truth
+// for the human-readable labels and heading-fallback logic every export
+// renderer shares). Meaningful only on nodes of type CHAPTER; PART and
+// SCENE nodes carry the default and ignore it.
+enum ManuscriptPageType {
+  CHAPTER
+  BLURBS
+  COPYRIGHT
+  DEDICATION
+  EPIGRAPH
+  FOREWORD
+  INTRODUCTION
+  PREFACE
+  PROLOGUE
+  EPILOGUE
+  AFTERWORD
+  BIBLIOGRAPHY
+  ACKNOWLEDGMENTS
+  ABOUT_THE_AUTHOR
+  ALSO_BY
+  UNCATEGORIZED
+}
+
 // A single self-referential table for the whole Book -> Part -> Chapter -> Scene
 // tree. Using one flexible table (instead of three rigid ones) means the
 // hierarchy can be reorganized (including drag-and-drop) without redesigning
@@ -244,6 +268,21 @@ model ManuscriptNode {
   type       ManuscriptNodeType
   title      String
   orderIndex Int
+
+  // Per-chapter "Convert To" / formatting options (2026-09-11, Phase 16).
+  // All meaningful only when type = CHAPTER; PART/SCENE nodes just carry
+  // the defaults, unused. Defaults are chosen so a pre-existing chapter's
+  // exported appearance is UNCHANGED until the author explicitly opts in
+  // -- pageType CHAPTER is the same as "not converted," and numbered
+  // false keeps today's plain "title, or Chapter <n> if blank" fallback
+  // (see chapterHeadingLabel() in page-types.ts for the exact rule).
+  pageType            ManuscriptPageType @default(CHAPTER)
+  numbered            Boolean            @default(false)
+  chapterAuthor       String?
+  // null = follow the book-wide "show chapter titles" print option;
+  // true/false = force this one chapter's heading on/off regardless of
+  // that book-wide setting.
+  showHeadingOverride Boolean?
 
   // Present only when type = SCENE
   scene Scene?

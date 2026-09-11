@@ -38,6 +38,7 @@
 
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
 import type { EpubBookInput, EpubChapter, EpubPart, EpubSection, EpubCoverImage } from "./build-epub";
+import { chapterHeadingLabel } from "./page-types";
 import {
   CRIMSON_PRO_REGULAR,
   CRIMSON_PRO_ITALIC,
@@ -336,7 +337,17 @@ function chapterHtml(
   showChapterTitles: boolean,
   backgroundSpreadDataUri: string | null
 ): string {
-  const label = chapter.title?.trim() || `Chapter ${chapterNumber}`;
+  const label = chapterHeadingLabel({
+    pageType: chapter.pageType,
+    title: chapter.title,
+    numbered: chapter.numbered,
+    chapterNumber,
+  });
+  // Per-chapter "Show Heading in Book" (chapter.showHeadingOverride)
+  // overrides the book-wide showChapterTitles setting in EITHER
+  // direction: null falls through to the book-wide value; true/false
+  // forces this one chapter's heading on/off regardless of it.
+  const showHeading = (chapter.showHeadingOverride ?? showChapterTitles) && !!label;
   let seenFirstScene = false;
   const scenesHtml = chapter.scenes
     .filter((scene) => !isSceneContentEmpty(scene.content))
@@ -348,12 +359,17 @@ function chapterHtml(
     .join("\n");
   const markedScenesHtml = markChapterFirstParagraph(scenesHtml);
 
-  // No <h1> at all (not just visually hidden) when titles are off -- this
-  // also means nothing ever calls "string-set: chaptertitle" for this
-  // chapter, so @top-center's "content: string(chaptertitle)" correctly
-  // renders blank on its pages instead of carrying over a stale title.
-  const titleHtml = showChapterTitles ? `\n    <h1 class="chapter-title">${escapeXml(label)}</h1>` : "";
-  const chapterStartClass = showChapterTitles ? "chapter-start" : "chapter-start chapter-start--untitled";
+  // No <h1> at all (not just visually hidden) when the heading is off --
+  // this also means nothing ever calls "string-set: chaptertitle" for
+  // this chapter, so @top-center's "content: string(chaptertitle)"
+  // correctly renders blank on its pages instead of carrying over a
+  // stale title.
+  const authorHtml =
+    showHeading && chapter.chapterAuthor?.trim()
+      ? `\n    <p class="chapter-author">by ${escapeXml(chapter.chapterAuthor.trim())}</p>`
+      : "";
+  const titleHtml = showHeading ? `\n    <h1 class="chapter-title">${escapeXml(label)}</h1>${authorHtml}` : "";
+  const chapterStartClass = showHeading ? "chapter-start" : "chapter-start chapter-start--untitled";
 
   // Chapter-start background SPREAD (PrintOptions.backgroundImageChapterStartSpread,
   // 2026-09-11) -- an otherwise-blank verso page carrying the left half of
@@ -391,7 +407,10 @@ function partHtml(
   const chaptersHtml = part.chapters
     .map((chapter) => {
       const html = chapterHtml(chapter, chapterNumber, ctx, showChapterTitles, backgroundSpreadDataUri);
-      chapterNumber += 1;
+      // Only a real chapter advances the auto-number -- a Dedication or
+      // Acknowledgments page inside a part shouldn't bump the next
+      // chapter's number.
+      if (chapter.pageType === "CHAPTER") chapterNumber += 1;
       return html;
     })
     .join("\n");
@@ -1170,6 +1189,14 @@ ${
   margin: 0;
   text-indent: 0;
 }
+/* "Add Chapter Author" -- a per-chapter byline for multi-author
+   anthologies/collections, directly under the heading. */
+.chapter-author {
+  font-size: 11pt;
+  font-style: italic;
+  margin: 0.3em 0 0;
+  text-indent: 0;
+}
 /* Titles hidden (see PrintOptions.showChapterTitles): the chapter still
    gets its own fresh page (break-before is set on .chapter-start itself,
    unaffected by this), just with a smaller, plain gap up top instead of
@@ -1272,7 +1299,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
         return result.html;
       }
       const html = chapterHtml(section.chapter, chapterNumber, ctx, resolved.showChapterTitles, backgroundSpreadDataUri);
-      chapterNumber += 1;
+      if (section.chapter.pageType === "CHAPTER") chapterNumber += 1;
       return html;
     })
     .join("\n");

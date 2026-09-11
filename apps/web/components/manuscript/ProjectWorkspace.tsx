@@ -12,6 +12,7 @@ import {
   childTypeAllowed,
   type ManuscriptNodeData,
   type NodeType,
+  type PageType,
   type SceneData,
 } from "@/lib/manuscript-tree";
 import {
@@ -19,6 +20,9 @@ import {
   deleteNode,
   renameNode,
   reorderNodes,
+  convertNodePageType,
+  updateNodeFormatting,
+  clearNodeTitle,
 } from "@/lib/actions/manuscript";
 
 interface ProjectWorkspaceProps {
@@ -56,6 +60,10 @@ export function ProjectWorkspace({
         type: created.type as NodeType,
         title: created.title,
         orderIndex: created.orderIndex,
+        pageType: created.pageType,
+        numbered: created.numbered,
+        chapterAuthor: created.chapterAuthor,
+        showHeadingOverride: created.showHeadingOverride,
         scene: created.scene
           ? {
               id: created.scene.id,
@@ -165,6 +173,34 @@ export function ProjectWorkspace({
     handleReorder([...updates, ...oldSiblings]);
   }
 
+  // Per-chapter "Convert To" page type + related formatting options
+  // (2026-09-11, Phase 16) -- same optimistic-update-then-fire-and-forget
+  // pattern as handleRename above.
+  function handleConvertPageType(id: string, pageType: PageType) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, pageType } : n)));
+    convertNodePageType(id, projectId, pageType).catch(() => {});
+  }
+
+  function handleSetNumbered(id: string, numbered: boolean) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, numbered } : n)));
+    updateNodeFormatting(id, projectId, { numbered }).catch(() => {});
+  }
+
+  function handleSetChapterAuthor(id: string, chapterAuthor: string | null) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, chapterAuthor } : n)));
+    updateNodeFormatting(id, projectId, { chapterAuthor }).catch(() => {});
+  }
+
+  function handleSetShowHeadingOverride(id: string, showHeadingOverride: boolean | null) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, showHeadingOverride } : n)));
+    updateNodeFormatting(id, projectId, { showHeadingOverride }).catch(() => {});
+  }
+
+  function handleClearTitle(id: string) {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, title: "" } : n)));
+    clearNodeTitle(id, projectId).catch(() => {});
+  }
+
   function handleWordCountChange(sceneId: string, wordCount: number) {
     setNodes((prev) =>
       prev.map((n) => (n.scene?.id === sceneId ? { ...n, scene: { ...n.scene!, wordCount } } : n))
@@ -212,6 +248,11 @@ export function ProjectWorkspace({
             onIndent={handleIndent}
             onOutdent={handleOutdent}
             onMove={handleMove}
+            onConvertPageType={handleConvertPageType}
+            onSetNumbered={handleSetNumbered}
+            onSetChapterAuthor={handleSetChapterAuthor}
+            onSetShowHeadingOverride={handleSetShowHeadingOverride}
+            onClearTitle={handleClearTitle}
           />
         </aside>
 

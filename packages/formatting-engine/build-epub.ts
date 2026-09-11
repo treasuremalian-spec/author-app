@@ -6,6 +6,7 @@
 
 import JSZip from "jszip";
 import { sceneContentToXhtml, isSceneContentEmpty, escapeXml, type RenderContext } from "./tiptap-to-xhtml";
+import { chapterHeadingLabel, PAGE_TYPE_LABELS, type PageType } from "./page-types";
 
 export interface EpubScene {
   id: string;
@@ -15,6 +16,16 @@ export interface EpubScene {
 export interface EpubChapter {
   id: string;
   title: string;
+  // "Convert To" page type + related per-chapter options (2026-09-11,
+  // Phase 16) -- see page-types.ts's chapterHeadingLabel() for exactly
+  // how these combine into the heading that actually prints.
+  pageType: PageType;
+  numbered: boolean;
+  chapterAuthor: string | null;
+  // null = always show (EPUB has no book-wide "show chapter titles"
+  // setting to inherit from, unlike the print PDF); true/false force
+  // this one chapter's heading on/off.
+  showHeadingOverride: boolean | null;
   scenes: EpubScene[];
 }
 
@@ -116,7 +127,26 @@ function partPageHtml(part: EpubPart): string {
   );
 }
 
-function chapterPageHtml(chapter: EpubChapter, ctx?: RenderContext): string {
+// EPUB3 has a standard vocabulary for exactly this kind of front-/back-
+// matter section (https://www.w3.org/publishing/epub3/epub-ssv.html) --
+// mapped here for every page type that has a clean standard term; the
+// rest (no exact standard equivalent) just fall back to the plain
+// "chapter" epub:type, same as before this feature existed.
+const EPUB_TYPE_BY_PAGE_TYPE: Partial<Record<PageType, string>> = {
+  COPYRIGHT: "copyright-page",
+  DEDICATION: "dedication",
+  EPIGRAPH: "epigraph",
+  FOREWORD: "foreword",
+  INTRODUCTION: "introduction",
+  PREFACE: "preface",
+  PROLOGUE: "prologue",
+  EPILOGUE: "epilogue",
+  AFTERWORD: "afterword",
+  BIBLIOGRAPHY: "bibliography",
+  ACKNOWLEDGMENTS: "acknowledgments",
+};
+
+function chapterPageHtml(chapter: EpubChapter, chapterNumber: number, ctx?: RenderContext): string {
   const nonEmptyScenes = chapter.scenes.filter((s) => !isSceneContentEmpty(s.content));
   const body = nonEmptyScenes
     .map((scene, i) => {
@@ -126,10 +156,23 @@ function chapterPageHtml(chapter: EpubChapter, ctx?: RenderContext): string {
     })
     .join("\n");
 
+  const label = chapterHeadingLabel({
+    pageType: chapter.pageType,
+    title: chapter.title,
+    numbered: chapter.numbered,
+    chapterNumber,
+  });
+  const showHeading = (chapter.showHeadingOverride ?? true) && !!label;
+  const authorHtml =
+    showHeading && chapter.chapterAuthor?.trim()
+      ? `\n    <p class="chapter-author">by ${escapeXml(chapter.chapterAuthor.trim())}</p>`
+      : "";
+  const headingHtml = showHeading ? `\n    <h1>${escapeXml(label)}</h1>${authorHtml}` : "";
+  const epubType = EPUB_TYPE_BY_PAGE_TYPE[chapter.pageType] ?? "chapter";
+
   return xhtmlPage(
-    chapter.title,
-    `  <section epub:type="chapter">
-    <h1>${escapeXml(chapter.title)}</h1>
+    label || chapter.title || "Chapter",
+    `  <section epub:type="${epubType}">${headingHtml}
 ${body || "  <p>&#160;</p>"}
   </section>`
   );
@@ -443,13 +486,31 @@ export async function buildEpub(book: EpubBookInput): Promise<Buffer> {
   let partNumber = 0;
 
   function addChapter(chapter: EpubChapter) {
-    chapterNumber += 1;
-    const id = `chapter-${chapterNumber}`;
+    // Only real chapters advance the auto-number -- a Dedication or
+    // Acknowledgments page sitting between Chapter 2 and Chapter 3
+    // shouldn't bump the next one to "Chapter 4".
+    if (chapter.pageType === "CHAPTER") chapterNumber += 1;
+    const label = chapterHeadingLabel({
+      pageType: chapter.pageType,
+      title: chapter.title,
+      numbered: chapter.numbered,
+      chapterNumber,
+    });
+    const id = `chapter-${manifest.length}`;
     const filename = `${id}.xhtml`;
-    oebps.file(filename, chapterPageHtml(chapter, renderCtx));
+    oebps.file(filename, chapterPageHtml(chapter, chapterNumber, renderCtx));
     manifest.push({ id, filename, mediaType: "application/xhtml+xml" });
     spineIds.push(id);
-    navEntries.push({ filename, title: chapter.title || `Chapter ${chapterNumber}`, isPart: false });
+    // The nav/TOC entry always needs SOME distinguishing text (unlike the
+    // page itself, which can legitimately print nothing -- see
+    // PAGE_TYPE_DEFAULT_HEADING's UNCATEGORIZED case) -- fall back to the
+    // page type's own generic name rather than the bare, unhelpful word
+    // "Chapter" a blank-everything node used to get listed as.
+    navEntries.push({
+      filename,
+      title: label || chapter.title || PAGE_TYPE_LABELS[chapter.pageType],
+      isPart: false,
+    });
   }
 
   for (const section of book.sections) {

@@ -30,17 +30,24 @@ import {
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   buildTree,
   childTypeAllowed,
   totalWordCount,
+  CONVERT_TO_PAGE_TYPES,
+  PAGE_TYPE_LABELS,
   type ManuscriptNodeData,
   type NodeType,
+  type PageType,
   type TreeNode,
 } from "@/lib/manuscript-tree";
 
@@ -53,6 +60,13 @@ export interface BinderHandlers {
   onIndent: (id: string) => void;
   onOutdent: (id: string) => void;
   onMove: (id: string, direction: "up" | "down") => void;
+  // Per-chapter "Convert To" page type + related formatting options
+  // (2026-09-11, Phase 16) -- all four only meaningful on CHAPTER nodes.
+  onConvertPageType: (id: string, pageType: PageType) => void;
+  onSetNumbered: (id: string, numbered: boolean) => void;
+  onSetChapterAuthor: (id: string, chapterAuthor: string | null) => void;
+  onSetShowHeadingOverride: (id: string, showHeadingOverride: boolean | null) => void;
+  onClearTitle: (id: string) => void;
 }
 
 interface BinderProps extends BinderHandlers {
@@ -192,6 +206,8 @@ function BinderNode({
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(node.title);
+  const [editingAuthor, setEditingAuthor] = useState(false);
+  const [draftAuthor, setDraftAuthor] = useState(node.chapterAuthor ?? "");
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: node.id,
@@ -217,6 +233,14 @@ function BinderNode({
       handlers.onRename(node.id, trimmed);
     } else {
       setDraftTitle(node.title);
+    }
+  }
+
+  function commitAuthor() {
+    const trimmed = draftAuthor.trim();
+    setEditingAuthor(false);
+    if (trimmed !== (node.chapterAuthor ?? "")) {
+      handlers.onSetChapterAuthor(node.id, trimmed || null);
     }
   }
 
@@ -281,6 +305,12 @@ function BinderNode({
           </button>
         )}
 
+        {node.type === "CHAPTER" && node.pageType !== "CHAPTER" && (
+          <span className="shrink-0 truncate rounded-full bg-accent/40 px-1.5 py-0.5 text-[10px] font-medium text-accent-foreground">
+            {PAGE_TYPE_LABELS[node.pageType]}
+          </span>
+        )}
+
         {node.type === "SCENE" && (
           <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
             {words}
@@ -312,6 +342,76 @@ function BinderNode({
             {node.type !== "PART" && (
               <DropdownMenuItem onSelect={() => handlers.onIndent(node.id)}>Indent</DropdownMenuItem>
             )}
+
+            {node.type === "CHAPTER" && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Convert to</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {CONVERT_TO_PAGE_TYPES.map((pt) => (
+                      <DropdownMenuCheckboxItem
+                        key={pt}
+                        checked={node.pageType === pt}
+                        onCheckedChange={() => handlers.onConvertPageType(node.id, pt)}
+                      >
+                        {PAGE_TYPE_LABELS[pt]}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                {node.pageType === "CHAPTER" && (
+                  <DropdownMenuCheckboxItem
+                    checked={node.numbered}
+                    onCheckedChange={(value) => handlers.onSetNumbered(node.id, value === true)}
+                  >
+                    Numbered
+                  </DropdownMenuCheckboxItem>
+                )}
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setDraftAuthor(node.chapterAuthor ?? "");
+                    setEditingAuthor(true);
+                  }}
+                >
+                  {node.chapterAuthor ? "Edit Chapter Author" : "Add Chapter Author"}
+                </DropdownMenuItem>
+                {node.chapterAuthor && (
+                  <DropdownMenuItem onSelect={() => handlers.onSetChapterAuthor(node.id, null)}>
+                    Remove Chapter Author
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Show heading in book</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuCheckboxItem
+                      checked={node.showHeadingOverride == null}
+                      onCheckedChange={() => handlers.onSetShowHeadingOverride(node.id, null)}
+                    >
+                      Follow book setting
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={node.showHeadingOverride === true}
+                      onCheckedChange={() => handlers.onSetShowHeadingOverride(node.id, true)}
+                    >
+                      Always show
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={node.showHeadingOverride === false}
+                      onCheckedChange={() => handlers.onSetShowHeadingOverride(node.id, false)}
+                    >
+                      Always hide
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                {node.title.trim() !== "" && (
+                  <DropdownMenuItem onSelect={() => handlers.onClearTitle(node.id)}>
+                    Clear Title
+                  </DropdownMenuItem>
+                )}
+              </>
+            )}
+
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => handlers.onDelete(node.id)}
@@ -322,6 +422,27 @@ function BinderNode({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {editingAuthor && (
+        <div className="flex items-center gap-1 pb-1" style={{ paddingLeft: depth * 16 + 26 }}>
+          <span className="shrink-0 text-[11px] text-muted-foreground">by</span>
+          <input
+            autoFocus
+            value={draftAuthor}
+            onChange={(e) => setDraftAuthor(e.target.value)}
+            onBlur={commitAuthor}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitAuthor();
+              if (e.key === "Escape") {
+                setDraftAuthor(node.chapterAuthor ?? "");
+                setEditingAuthor(false);
+              }
+            }}
+            placeholder="Chapter author name"
+            className="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-xs outline-none"
+          />
+        </div>
+      )}
 
       {hasChildren && expanded && (
         <NodeList

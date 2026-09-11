@@ -131,6 +131,86 @@ export async function renameNode(nodeId: string, projectId: string, title: strin
   revalidatePath(`/projects/${projectId}`);
 }
 
+// ---------------------------------------------------------------------------
+// Per-chapter "Convert To" page type + related formatting options
+// (2026-09-11, Phase 16)
+// ---------------------------------------------------------------------------
+
+export async function convertNodePageType(
+  nodeId: string,
+  projectId: string,
+  pageType:
+    | "CHAPTER"
+    | "BLURBS"
+    | "COPYRIGHT"
+    | "DEDICATION"
+    | "EPIGRAPH"
+    | "FOREWORD"
+    | "INTRODUCTION"
+    | "PREFACE"
+    | "PROLOGUE"
+    | "EPILOGUE"
+    | "AFTERWORD"
+    | "BIBLIOGRAPHY"
+    | "ACKNOWLEDGMENTS"
+    | "ABOUT_THE_AUTHOR"
+    | "ALSO_BY"
+    | "UNCATEGORIZED"
+) {
+  const user = await requireUser();
+  await assertProjectOwnership(projectId, user.id);
+  await assertNodeInProject(nodeId, projectId);
+
+  await prisma.manuscriptNode.update({
+    where: { id: nodeId },
+    data: { pageType },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function updateNodeFormatting(
+  nodeId: string,
+  projectId: string,
+  patch: {
+    numbered?: boolean;
+    chapterAuthor?: string | null;
+    showHeadingOverride?: boolean | null;
+  }
+) {
+  const user = await requireUser();
+  await assertProjectOwnership(projectId, user.id);
+  await assertNodeInProject(nodeId, projectId);
+
+  await prisma.manuscriptNode.update({
+    where: { id: nodeId },
+    data: patch,
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// "Clear Title" -- a one-time action, not a persistent flag: it just
+// empties the stored title so the node falls back to its page type's
+// default heading (see chapterHeadingLabel() in the formatting-engine
+// package), the exact same fallback an always-blank title already gets.
+// Kept separate from renameNode(), which deliberately rejects an empty
+// string (a blank rename-on-blur means "I didn't mean to clear this",
+// per Binder.tsx's commitRename()) -- this is the explicit, unambiguous
+// version of that same action.
+export async function clearNodeTitle(nodeId: string, projectId: string) {
+  const user = await requireUser();
+  await assertProjectOwnership(projectId, user.id);
+  await assertNodeInProject(nodeId, projectId);
+
+  await prisma.manuscriptNode.update({
+    where: { id: nodeId },
+    data: { title: "" },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function deleteNode(nodeId: string, projectId: string) {
   const user = await requireUser();
   await assertProjectOwnership(projectId, user.id);

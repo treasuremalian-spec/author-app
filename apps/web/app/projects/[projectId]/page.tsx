@@ -17,6 +17,10 @@ export default async function ProjectPage({
     type: n.type,
     title: n.title,
     orderIndex: n.orderIndex,
+    pageType: n.pageType,
+    numbered: n.numbered,
+    chapterAuthor: n.chapterAuthor,
+    showHeadingOverride: n.showHeadingOverride,
     scene: n.scene
       ? ({
           id: n.scene.id,
