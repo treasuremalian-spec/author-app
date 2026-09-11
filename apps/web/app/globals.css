@@ -4,71 +4,79 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.85rem;
+  --radius: 0rem;
 
-  /* "Author studio" palette -- warm, creative, not corporate */
-  --background: #fbf7f2;
-  --foreground: #241b2f;
+  /* "Warm Industrial" palette -- warm off-white paper, ink black, one
+     electric-blue accent. Sharp and rectangular by design: radius stays
+     at 0 everywhere (see the @theme block below); only the Button/Badge
+     components hardcode rounded-full themselves, matching the one
+     explicit exception ("the main CTA buttons and small status badges"). */
+  --background: #ebebe8;
+  --foreground: #18181b;
 
-  --card: #ffffff;
-  --card-foreground: #241b2f;
+  --card: #f4f4f5;
+  --card-foreground: #18181b;
 
-  --popover: #ffffff;
-  --popover-foreground: #241b2f;
+  --popover: #f4f4f5;
+  --popover-foreground: #18181b;
 
-  --primary: #7c3157;
-  --primary-foreground: #fdf6f9;
+  --primary: #18181b;
+  --primary-foreground: #ebebe8;
 
-  --secondary: #f3d9e0;
-  --secondary-foreground: #5b1f38;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
 
-  --muted: #f1e9e2;
-  --muted-foreground: #6b6070;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
 
-  --accent: #d9a441;
-  --accent-foreground: #2c1c05;
+  --accent: #0066ff;
+  --accent-foreground: #ffffff;
 
-  --destructive: #c0392b;
+  --destructive: #dc2626;
   --destructive-foreground: #fff5f4;
 
-  --border: #e7dcd2;
-  --input: #e7dcd2;
-  --ring: #7c3157;
+  --border: #d4d4d8;
+  --input: #d4d4d8;
+  --ring: #0066ff;
 
-  --success: #3f7d5c;
+  --success: #16a34a;
   --success-foreground: #f2fbf6;
+
+  /* Shared "industrial" easing -- smooth, high-inertia settle used for
+     transforms/clip-path reveals across the marketing page. */
+  --ease-industrial: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
-  --background: #1a1420;
-  --foreground: #f3ecf2;
+  --background: #18181b;
+  --foreground: #ebebe8;
 
-  --card: #241b2f;
-  --card-foreground: #f3ecf2;
+  --card: #232326;
+  --card-foreground: #ebebe8;
 
-  --popover: #241b2f;
-  --popover-foreground: #f3ecf2;
+  --popover: #232326;
+  --popover-foreground: #ebebe8;
 
-  --primary: #e0679a;
-  --primary-foreground: #2c1120;
+  --primary: #ebebe8;
+  --primary-foreground: #18181b;
 
-  --secondary: #3a2438;
-  --secondary-foreground: #f3d9e0;
+  --secondary: #27272a;
+  --secondary-foreground: #ebebe8;
 
-  --muted: #2c2233;
-  --muted-foreground: #b6a9be;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
 
-  --accent: #e9b95c;
-  --accent-foreground: #2c1c05;
+  --accent: #3385ff;
+  --accent-foreground: #0b1220;
 
   --destructive: #e5766a;
   --destructive-foreground: #2c0d09;
 
-  --border: #382c3f;
-  --input: #382c3f;
-  --ring: #e0679a;
+  --border: #3f3f46;
+  --input: #3f3f46;
+  --ring: #3385ff;
 
-  --success: #6fbd94;
+  --success: #4ade80;
   --success-foreground: #0c2016;
 }
 
@@ -95,19 +103,80 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --radius-sm: calc(var(--radius) - 0.35rem);
-  --radius-md: calc(var(--radius) - 0.2rem);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 0.35rem);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 2px;
 
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-fraunces);
+  --font-display: var(--font-playfair);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* ---------------------------------------------------------------------
+   "Warm Industrial" site-wide texture layer -- a fixed 12-column grid-line
+   background and a faint fractal-noise overlay, both rendered once in
+   RootLayout (see layout.tsx) so every page gets them without per-page
+   setup. Both are decorative (aria-hidden, pointer-events: none) and sit
+   at z-index 0 with no explicit stacking context of their own; ordinary
+   page content that follows them in the DOM paints on top automatically. */
+.bg-grid-lines {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+.bg-grid-lines__inner {
+  width: min(100%, 1600px);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+}
+.bg-grid-lines__inner > div {
+  border-left: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.bg-grid-lines__inner > div:last-child {
+  border-right: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.bg-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Massive stroke-only heading treatment -- outlined in the foreground
+   color with a transparent fill, for visual lightness at hero scale. */
+.stroke-text {
+  -webkit-text-stroke: 1px var(--foreground);
+  color: transparent;
+}
+
+/* Infinite horizontal scroll for the marketing marquee ticker. The
+   caller renders the content twice back to back (two identical tracks);
+   animating exactly -50% makes the loop seamless. */
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 26s linear infinite;
 }
 
 /* Manual page-break marker in the manuscript editor (Tiptap "pageBreak"
