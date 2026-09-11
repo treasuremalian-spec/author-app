@@ -269,8 +269,8 @@ export function ProjectWorkspace({
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <PenLine className="size-5" />
+              <div className="flex size-12 items-center justify-center border border-border text-foreground">
+                <PenLine className="size-5" strokeWidth={1.5} />
               </div>
               <p className="max-w-xs text-sm text-muted-foreground">
                 Select a scene from the left, or add a new one, to start writing.

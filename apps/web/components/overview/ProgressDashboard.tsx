@@ -19,7 +19,7 @@ function StatTile({
 }) {
   return (
     <div className="flex-1 rounded-xl border border-border bg-card p-4">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <div className="mb-1 flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
         <Icon className="size-3.5" />
         {label}
       </div>
@@ -38,7 +38,7 @@ export function ProgressDashboard({ details }: { details: ProjectDetails }) {
 
   return (
     <Card className="space-y-4 p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
         Progress
       </p>
 

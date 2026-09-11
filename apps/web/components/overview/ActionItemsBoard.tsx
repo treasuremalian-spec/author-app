@@ -115,7 +115,7 @@ export function ActionItemsBoard({
 
   return (
     <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
         Action items
       </p>
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
@@ -168,7 +168,7 @@ function Column({
       <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-1.5">
           <span className={cn("size-1.5 rounded-full", accent)} />
-          <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
         </div>
         <button
           type="button"
@@ -223,7 +223,7 @@ function ActionCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-start gap-1 rounded-lg border border-border bg-card px-2 py-1.5 text-sm shadow-sm"
+      className="group flex items-start gap-1 rounded-lg border border-border bg-card px-2 py-1.5 text-sm shadow-none"
     >
       <button
         type="button"

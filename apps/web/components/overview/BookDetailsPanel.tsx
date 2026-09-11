@@ -66,7 +66,7 @@ export function BookDetailsPanel({
   return (
     <Card className="space-y-5 p-5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
           Book details
         </p>
         <span className="text-xs text-muted-foreground">

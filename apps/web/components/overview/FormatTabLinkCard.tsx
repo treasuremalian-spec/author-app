@@ -13,7 +13,7 @@ export function FormatTabLinkCard({ projectId }: { projectId: string }) {
   return (
     <Card className="flex items-center justify-between gap-4 p-5">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Format & Export</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Format & Export</p>
         <p className="mt-1 text-sm text-muted-foreground">
           EPUB, print-ready PDF, and Word exports, with a live preview as you format -- now its own tab.
         </p>
