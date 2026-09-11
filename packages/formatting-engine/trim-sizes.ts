@@ -20,9 +20,68 @@
 // side. Any other genuinely client-safe formatting-engine constant should
 // get the same treatment rather than being added to print-html.ts/
 // build-epub.ts/etc. and re-exported through the barrel.
-export type TrimSize = "5x8" | "6x9";
+//
+// Expanded 2026-09-11 from just 5x8/6x9 to the fuller Vellum-style list
+// Tasia asked for (screenshot reference, 2026-09-07 backlog note): 15
+// distinct physical trim sizes across 4 categories. NOTE: her reference
+// list also had a 5th category, "Large print", but it repeated the exact
+// same 4 physical sizes already listed under Popular/Full size (5.5x8.5,
+// 6x9, 6.14x9.21, 7x10) -- confirmed with her (2026-09-11) that "large
+// print" isn't actually a distinct set of page sizes, it's a bigger BODY
+// FONT, usable with whatever trim size you've already picked. So it's
+// NOT a TrimSize/TRIM_SIZE_DIMENSIONS entry at all -- see
+// PrintOptions.largePrint in print-html.ts instead, a separate flag
+// orthogonal to trim size.
+export type TrimSize =
+  | "5x8"
+  | "5.25x8"
+  | "5.5x8.5"
+  | "6x9"
+  | "5.06x7.81"
+  | "5.5x8.25"
+  | "6.14x9.21"
+  | "4x6"
+  | "4.12x6.75"
+  | "4.25x7"
+  | "4.37x7"
+  | "7x10"
+  | "8x10"
+  | "8.25x11"
+  | "8.5x11";
 
 export const TRIM_SIZE_DIMENSIONS: Record<TrimSize, { width: string; height: string; label: string }> = {
-  "5x8": { width: "5in", height: "8in", label: '5" x 8" (mass market / digest)' },
+  "5x8": { width: "5in", height: "8in", label: '5" x 8"' },
+  "5.25x8": { width: "5.25in", height: "8in", label: '5.25" x 8"' },
+  "5.5x8.5": { width: "5.5in", height: "8.5in", label: '5.5" x 8.5"' },
   "6x9": { width: "6in", height: "9in", label: '6" x 9" (trade paperback)' },
+  "5.06x7.81": { width: "5.06in", height: "7.81in", label: '5.06" x 7.81"' },
+  "5.5x8.25": { width: "5.5in", height: "8.25in", label: '5.5" x 8.25"' },
+  "6.14x9.21": { width: "6.14in", height: "9.21in", label: '6.14" x 9.21"' },
+  "4x6": { width: "4in", height: "6in", label: '4" x 6" (mass market)' },
+  "4.12x6.75": { width: "4.12in", height: "6.75in", label: '4.12" x 6.75" (mass market)' },
+  "4.25x7": { width: "4.25in", height: "7in", label: '4.25" x 7" (mass market)' },
+  "4.37x7": { width: "4.37in", height: "7in", label: '4.37" x 7" (mass market)' },
+  "7x10": { width: "7in", height: "10in", label: '7" x 10" (full size)' },
+  "8x10": { width: "8in", height: "10in", label: '8" x 10" (full size)' },
+  "8.25x11": { width: "8.25in", height: "11in", label: '8.25" x 11" (full size)' },
+  "8.5x11": { width: "8.5in", height: "11in", label: '8.5" x 11" (full size)' },
 };
+
+/** Groups TRIM_SIZE_DIMENSIONS the same way Tasia's reference screenshot
+ * did (2026-09-07), for a categorized <select> in the Format tab rather
+ * than one long flat list of 15 sizes -- "Large print" deliberately isn't
+ * one of these groups, see the file comment above. */
+export const TRIM_SIZE_GROUPS: { label: string; sizes: TrimSize[] }[] = [
+  { label: "Popular", sizes: ["5x8", "5.25x8", "5.5x8.5", "6x9"] },
+  { label: "Additional", sizes: ["5.06x7.81", "5.5x8.25", "6.14x9.21"] },
+  { label: "Mass market paperback", sizes: ["4x6", "4.12x6.75", "4.25x7", "4.37x7"] },
+  { label: "Full size", sizes: ["7x10", "8x10", "8.25x11", "8.5x11"] },
+];
+
+/** Every valid TrimSize value, for runtime validation (e.g. parsing the
+ * "trim" query param in export/pdf/route.ts) -- kept in sync with the
+ * TrimSize union above by construction, since it's just that union's own
+ * keys. */
+export const ALL_TRIM_SIZES: TrimSize[] = Object.keys(TRIM_SIZE_DIMENSIONS) as TrimSize[];
+
+export const DEFAULT_TRIM_SIZE: TrimSize = "6x9";

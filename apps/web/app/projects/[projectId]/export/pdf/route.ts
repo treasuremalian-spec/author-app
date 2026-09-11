@@ -8,13 +8,19 @@
 // compared to the EPUB export, which is near-instant string building).
 import { NextRequest, NextResponse } from "next/server";
 import { buildPrintHtml, renderPrintPdf, type TrimSize, type PrintOptions } from "@author-app/formatting-engine";
+import { ALL_TRIM_SIZES, DEFAULT_TRIM_SIZE } from "@author-app/formatting-engine/trim-sizes";
 import { loadBookForExport, safeBookFilename } from "@/lib/export-data";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+// Validated against every real TrimSize (grew from just 5x8/6x9 to 15
+// sizes 2026-09-11 -- see trim-sizes.ts) rather than a hardcoded list here,
+// so a future trim size added there doesn't also need a matching edit in
+// this file to actually become choosable.
 function parseTrimSize(value: string | null): TrimSize {
-  return value === "5x8" ? "5x8" : "6x9";
+  if (value && (ALL_TRIM_SIZES as string[]).includes(value)) return value as TrimSize;
+  return DEFAULT_TRIM_SIZE;
 }
 
 // Print options (Phase 15) come from query params set by FormatWorkspace.tsx's
@@ -55,6 +61,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     backgroundImageMode: parseBackgroundImageMode(searchParams.get("backgroundImageMode")),
     backgroundImageTextColor: parseBackgroundImageTextColor(searchParams.get("backgroundImageTextColor")),
     backgroundImageChapterStartSpread: parseBoolParam(searchParams.get("backgroundImageChapterStartSpread")),
+    largePrint: parseBoolParam(searchParams.get("largePrint")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
   };
 }

@@ -70,6 +70,17 @@ export interface PreviewOptions {
    * "honest approximation, not literal pagination" approach the rest of
    * this file already takes for backgroundImageMode itself. */
   backgroundImageChapterStartSpread: boolean;
+  /** Mirrors PrintOptions.largePrint (print-html.ts) -- bumps the body text
+   * size, independent of trim size (see that file's doc comment for why
+   * "large print" ended up as a font-size flag rather than a group of
+   * trim-size entries). Applied here as the SAME ratio print-html.ts uses
+   * (LARGE_PRINT_BODY_FONT_SIZE_PT / BODY_FONT_SIZE_PT below) against this
+   * preview's own base font-size, rather than a made-up preview-only
+   * number, so the preview's "how much bigger" honestly matches the real
+   * export's. Drop caps (already relative "em" sizing, inherited from the
+   * body wrapper) scale automatically along with it, same as in the real
+   * PDF. */
+  largePrint: boolean;
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -81,6 +92,15 @@ const MARGIN_BOTTOM_IN = 0.9;
 const MARGIN_OUTSIDE_IN = 0.6;
 const MARGIN_INSIDE_IN = 0.85;
 const FLAT_MARGIN_IN = 0.65;
+
+// Mirrors print-html.ts's BODY_FONT_SIZE_PT / LARGE_PRINT_BODY_FONT_SIZE_PT
+// -- not used as absolute sizes here (this preview's own base font-size is
+// a responsive clamp(), not a fixed pt value), just as the RATIO between
+// them, so largePrint bumps this preview by the same proportion the real
+// export bumps by. Keep these two files' numbers in sync if either changes.
+const BODY_FONT_SIZE_PT = 11.5;
+const LARGE_PRINT_BODY_FONT_SIZE_PT = 16;
+const LARGE_PRINT_RATIO = LARGE_PRINT_BODY_FONT_SIZE_PT / BODY_FONT_SIZE_PT;
 
 export function FormatPreview({ data, options }: { data: FormatPreviewData | null; options: PreviewOptions }) {
   const { width, height } = TRIM_SIZE_DIMENSIONS[options.trimSize];
@@ -129,6 +149,7 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     lineHeight: options.lineSpacing,
     textIndent: options.indentParagraphs ? "1.5em" : 0,
     marginBottom: options.indentParagraphs ? undefined : "0.9em",
+    fontSize: options.largePrint ? `${LARGE_PRINT_RATIO}em` : undefined,
   };
 
   const chapters = data?.chapters ?? [];

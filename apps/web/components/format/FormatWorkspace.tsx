@@ -14,7 +14,7 @@ import { Download, FileText, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import type { TrimSize } from "@author-app/formatting-engine/trim-sizes";
+import { TRIM_SIZE_GROUPS, TRIM_SIZE_DIMENSIONS, DEFAULT_TRIM_SIZE, type TrimSize } from "@author-app/formatting-engine/trim-sizes";
 import type { FormatPreviewData } from "@/lib/actions/format";
 import { FormatPreview } from "./FormatPreview";
 import { ReimportManuscriptDialog } from "./ReimportManuscriptDialog";
@@ -55,6 +55,14 @@ interface PrintOptionsState {
    * manuscript-image spread mode, which she confirmed she still wants
    * kept as its own thing). */
   backgroundImageChapterStartSpread: boolean;
+  /** Bumps the book's body text up to a real large-print size, independent
+   * of trim size -- see PrintOptions.largePrint's doc comment in
+   * print-html.ts for why this is a standalone flag rather than a
+   * "Large print" group of trim sizes (the author's own reference list
+   * repeated the same 4 physical page sizes already offered under
+   * Popular/Full size, confirmed 2026-09-11 that what she actually wants
+   * is bigger body text, usable with any trim). */
+  largePrint: boolean;
 }
 
 const DEFAULT_OPTIONS: PrintOptionsState = {
@@ -67,6 +75,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   backgroundImageMode: "none",
   backgroundImageTextColor: "dark",
   backgroundImageChapterStartSpread: false,
+  largePrint: false,
 };
 
 function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
@@ -81,6 +90,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     backgroundImageMode: options.backgroundImageMode,
     backgroundImageTextColor: options.backgroundImageTextColor,
     backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread ? "1" : "0",
+    largePrint: options.largePrint ? "1" : "0",
   });
   return `/projects/${projectId}/export/pdf?${params.toString()}`;
 }
@@ -93,7 +103,7 @@ export function FormatWorkspace({
   initialPreview: FormatPreviewData;
 }) {
   const [options, setOptions] = useState<PrintOptionsState>(DEFAULT_OPTIONS);
-  const [previewTrim, setPreviewTrim] = useState<TrimSize>("6x9");
+  const [previewTrim, setPreviewTrim] = useState<TrimSize>(DEFAULT_TRIM_SIZE);
   // Server-rendered once by the page itself (see app/projects/[projectId]/
   // format/page.tsx) -- every later options change is a pure client-side
   // restyle of this same content (see FormatPreview.tsx), never a fresh
@@ -279,29 +289,42 @@ export function FormatWorkspace({
                     <option value="1.6">Relaxed</option>
                   </select>
                 </div>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 rounded border-input"
+                    checked={options.largePrint}
+                    onChange={() => toggle("largePrint")}
+                  />
+                  Large print (bigger body text -- works with any trim size below)
+                </label>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  asChild
-                  size="sm"
-                  variant={previewTrim === "6x9" ? "default" : "outline"}
-                  onClick={() => setPreviewTrim("6x9")}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Label htmlFor="trim-size" className="text-sm font-normal text-foreground">
+                  Trim size
+                </Label>
+                <select
+                  id="trim-size"
+                  className="h-8 rounded-md border border-input bg-card px-2 text-sm shadow-sm"
+                  value={previewTrim}
+                  onChange={(event) => setPreviewTrim(event.target.value as TrimSize)}
                 >
-                  <a href={buildPdfHref(projectId, "6x9", options)} download>
+                  {TRIM_SIZE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.sizes.map((size) => (
+                        <option key={size} value={size}>
+                          {TRIM_SIZE_DIMENSIONS[size].label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <Button asChild size="sm">
+                  <a href={buildPdfHref(projectId, previewTrim, options)} download>
                     <Download className="size-3.5" />
-                    6&quot; x 9&quot; (trade)
-                  </a>
-                </Button>
-                <Button
-                  asChild
-                  size="sm"
-                  variant={previewTrim === "5x8" ? "default" : "outline"}
-                  onClick={() => setPreviewTrim("5x8")}
-                >
-                  <a href={buildPdfHref(projectId, "5x8", options)} download>
-                    <Download className="size-3.5" />
-                    5&quot; x 8&quot; (digest)
+                    Download PDF
                   </a>
                 </Button>
               </div>
@@ -354,6 +377,7 @@ export function FormatWorkspace({
             backgroundImageMode: options.backgroundImageMode,
             backgroundImageTextColor: options.backgroundImageTextColor,
             backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread,
+            largePrint: options.largePrint,
           }}
         />
       </div>

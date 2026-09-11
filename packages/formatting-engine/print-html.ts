@@ -53,15 +53,19 @@ import {
 // file comment for the real local `next build` failure that motivated
 // this.
 export { TRIM_SIZE_DIMENSIONS, type TrimSize } from "./trim-sizes";
-import type { TrimSize } from "./trim-sizes";
+import { TRIM_SIZE_DIMENSIONS, type TrimSize } from "./trim-sizes";
 
 // Same trim dimensions as TRIM_SIZE_DIMENSIONS above, but as plain numbers
 // (inches) rather than CSS length strings -- needed so bleed math below can
 // just add/subtract, rather than parsing a "6in" string back into a number.
-const TRIM_SIZE_INCHES: Record<TrimSize, { width: number; height: number }> = {
-  "5x8": { width: 5, height: 8 },
-  "6x9": { width: 6, height: 9 },
-};
+// Derived directly from TRIM_SIZE_DIMENSIONS (not hand-duplicated) since
+// trim-sizes.ts grew to 15 entries 2026-09-11 -- typing the same 15 numbers
+// twice in two files would just be two chances to get one of them wrong.
+const TRIM_SIZE_INCHES: Record<TrimSize, { width: number; height: number }> = Object.fromEntries(
+  (Object.entries(TRIM_SIZE_DIMENSIONS) as [TrimSize, { width: string; height: string; label: string }][]).map(
+    ([size, { width, height }]) => [size, { width: parseFloat(width), height: parseFloat(height) }]
+  )
+) as Record<TrimSize, { width: number; height: number }>;
 
 // How far a full-spread image bleeds past the book's actual trim line --
 // 0.125in (1/8in) is the industry-standard bleed allowance most print-on-
@@ -183,7 +187,32 @@ export interface PrintOptions {
    * this is on, regardless of chapterStartsOnRight, since a facing-page
    * spread inherently requires the chapter to land on a recto page. */
   backgroundImageChapterStartSpread?: boolean;
+  /** Bumps the book's body text up to a real large-print size (16pt,
+   * roughly 40% bigger than the normal 11.5pt body -- see BODY_FONT_SIZE_PT/
+   * LARGE_PRINT_BODY_FONT_SIZE_PT below), independent of trim size.
+   * Author's reference (2026-09-07 backlog note) listed "Large print" as
+   * its own group of trim sizes in the Format tab's dropdown, but on
+   * inspection those were the SAME 4 physical page sizes already listed
+   * under Popular/Full size (5.5x8.5, 6x9, 6.14x9.21, 7x10) -- confirmed
+   * with Tasia (2026-09-11) that what she actually wants is a bigger body
+   * font, usable with whatever trim size is already picked, not a
+   * duplicate set of page-size entries that would do nothing different
+   * from the same size picked elsewhere. So this is a flag orthogonal to
+   * TrimSize, not a TrimSize value. Drop caps (relative "em" sizing) and
+   * other body-relative elements scale automatically along with this;
+   * running headers and page numbers (fixed pt sizes in the @page rule)
+   * deliberately don't, since real large-print books still print normal-
+   * sized running matter -- only the body reading text gets bigger. */
+  largePrint?: boolean;
 }
+
+// Normal vs. large-print body text size -- see PrintOptions.largePrint
+// above. 16pt is a real large-print-edition body size (most large-print
+// publishers print body text in the 16-18pt range, vs. a normal book's
+// 9-12pt); chosen at the lower end of that range so a large-print export
+// doesn't balloon page count more than the format actually calls for.
+const BODY_FONT_SIZE_PT = 11.5;
+const LARGE_PRINT_BODY_FONT_SIZE_PT = 16;
 
 const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   mirroredMargins: false,
@@ -195,6 +224,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   backgroundImageMode: "none",
   backgroundImageTextColor: "dark",
   backgroundImageChapterStartSpread: false,
+  largePrint: false,
 };
 
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
@@ -407,6 +437,7 @@ function buildCss(
     backgroundImageMode,
     backgroundImageTextColor,
     backgroundImageChapterStartSpread,
+    largePrint,
   } = options;
   const bleed = bleedActive ? BLEED_IN : 0;
 
@@ -775,7 +806,12 @@ html, body {
 }
 body {
   font-family: "CrimsonPro", Georgia, "Times New Roman", serif;
-  font-size: 11.5pt;
+  /* PrintOptions.largePrint (2026-09-11) -- see its doc comment above for
+     why this is the only thing it changes: drop caps and other
+     body-relative ("em") elements scale automatically along with this,
+     running headers/page numbers (fixed pt sizes in the @page rule above)
+     deliberately don't. */
+  font-size: ${largePrint ? LARGE_PRINT_BODY_FONT_SIZE_PT : BODY_FONT_SIZE_PT}pt;
   line-height: ${lineSpacing};
   color: #1a1a1a;
 }
@@ -1172,6 +1208,7 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     backgroundImageTextColor: options.backgroundImageTextColor ?? DEFAULT_PRINT_OPTIONS.backgroundImageTextColor,
     backgroundImageChapterStartSpread:
       options.backgroundImageChapterStartSpread ?? DEFAULT_PRINT_OPTIONS.backgroundImageChapterStartSpread,
+    largePrint: options.largePrint ?? DEFAULT_PRINT_OPTIONS.largePrint,
   };
 
   // Same embed-as-data-URI reasoning as the inline manuscriptImage ctx
