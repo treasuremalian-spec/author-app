@@ -76,6 +76,30 @@ export function buildTree(nodes: ManuscriptNodeData[]): TreeNode[] {
   return roots;
 }
 
+/** A chapter's real content, as a flat list of { id, content } scenes --
+ * the ONE place this resolution happens, shared by every consumer that
+ * needs a chapter's actual prose (the print/EPUB/DOCX export pipeline via
+ * export-data.ts's toChapter(), and the Format tab's live preview via
+ * format.ts's getFormatPreviewData()) so they can't silently disagree on
+ * where a chapter's content lives.
+ *
+ * A chapter carries its own Scene directly now (Part A of the 2026-09-11
+ * manuscript-tab rework, see childTypeAllowed() above) -- fall back to the
+ * old walk-the-SCENE-children shape only as a safety net for a project
+ * whose multi-scene chapters haven't been migrated yet (see
+ * merge-multiscene-chapters.ts). Bug fixed 2026-09-11: format.ts's live
+ * preview was still ONLY doing the old children-walk, with no fallback to
+ * node.scene at all, so a chapter with real content directly attached to
+ * it (the normal case for every chapter created after Part A shipped)
+ * showed as blank in the live preview even though its real content
+ * existed and exported correctly everywhere else. */
+export function resolveChapterScenes(node: TreeNode): { id: string; content: unknown }[] {
+  if (node.scene) return [{ id: node.id, content: node.scene.content }];
+  return node.children
+    .filter((child) => child.type === "SCENE" && child.scene)
+    .map((child) => ({ id: child.id, content: child.scene!.content }));
+}
+
 export function totalWordCount(node: TreeNode): number {
   // A node with an attached scene IS the writing surface (true for every
   // SCENE node, and for CHAPTER nodes now that a chapter is the single

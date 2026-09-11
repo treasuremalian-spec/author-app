@@ -25,7 +25,7 @@ import { prisma } from "@author-app/database";
 import { sceneContentToXhtml, isSceneContentEmpty, docHasSpreadImage, type RenderContext } from "@author-app/formatting-engine";
 import { chapterHeadingLabel } from "@author-app/formatting-engine/page-types";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
-import { buildTree, type ManuscriptNodeData } from "@/lib/manuscript-tree";
+import { buildTree, resolveChapterScenes, type ManuscriptNodeData } from "@/lib/manuscript-tree";
 
 type NodeWithScene = {
   id: string;
@@ -170,8 +170,8 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
 
   let hasSpreadImage = false;
   for (const chapter of chapters) {
-    for (const sceneNode of chapter.children) {
-      if (sceneNode.scene && docHasSpreadImage(sceneNode.scene.content)) hasSpreadImage = true;
+    for (const scene of resolveChapterScenes(chapter)) {
+      if (docHasSpreadImage(scene.content)) hasSpreadImage = true;
     }
   }
 
@@ -182,9 +182,16 @@ export async function getFormatPreviewData(projectId: string): Promise<FormatPre
   let previewChapterNumber = 0;
   const previewChapters: FormatPreviewChapter[] = chapters.map((chapter) => {
     if (chapter.pageType === "CHAPTER") previewChapterNumber += 1;
-    const sceneHtmls = chapter.children
-      .filter((s) => s.scene && !isSceneContentEmpty(s.scene.content))
-      .map((s) => sceneContentToXhtml(s.scene!.content, PASSTHROUGH_IMAGE_CTX));
+    // Bug fixed 2026-09-11: this used to walk chapter.children looking for
+    // child SCENE nodes, which stopped existing once a chapter carries its
+    // own Scene directly (Part A of the manuscript-tab rework) -- every
+    // chapter's real content was silently invisible here even though it
+    // exported correctly everywhere else. See resolveChapterScenes() in
+    // manuscript-tree.ts (shared with export-data.ts's toChapter() so the
+    // two can't drift apart again).
+    const sceneHtmls = resolveChapterScenes(chapter)
+      .filter((s) => !isSceneContentEmpty(s.content))
+      .map((s) => sceneContentToXhtml(s.content, PASSTHROUGH_IMAGE_CTX));
     return {
       title: chapterHeadingLabel({
         pageType: chapter.pageType,

@@ -8,7 +8,7 @@
 import { prisma } from "@author-app/database";
 import { collectImageUrls, type EpubChapter, type EpubCoverImage, type EpubSection } from "@author-app/formatting-engine";
 import { requireUser, assertProjectOwnership } from "@/lib/actions/shared";
-import { buildTree, type ManuscriptNodeData, type TreeNode } from "@/lib/manuscript-tree";
+import { buildTree, resolveChapterScenes, type ManuscriptNodeData, type TreeNode } from "@/lib/manuscript-tree";
 
 // The local (un-generated) Prisma client types everything as `any`, so this
 // shape pins down exactly what we read off each row -- see the "use server"
@@ -47,16 +47,10 @@ function toChapter(node: TreeNode): EpubChapter {
     numbered: node.numbered,
     chapterAuthor: node.chapterAuthor,
     showHeadingOverride: node.showHeadingOverride,
-    // A chapter carries its own Scene directly now (Part A of the
-    // 2026-09-11 manuscript-tab rework) -- fall back to the old
-    // walk-the-SCENE-children shape only as a safety net in case this
-    // export runs against a project whose multi-scene chapters haven't
-    // been migrated yet.
-    scenes: node.scene
-      ? [{ id: node.id, content: node.scene.content }]
-      : node.children
-          .filter((child) => child.type === "SCENE" && child.scene)
-          .map((child) => ({ id: child.id, content: child.scene!.content })),
+    // See resolveChapterScenes() in manuscript-tree.ts -- shared with
+    // format.ts's live preview so the two can't disagree on where a
+    // chapter's content lives.
+    scenes: resolveChapterScenes(node),
   };
 }
 
