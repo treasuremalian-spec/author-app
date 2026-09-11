@@ -1,9 +1,10 @@
-import { getProjectMeta } from "@/lib/actions/manuscript";
+import { getProjectMeta, listChapters } from "@/lib/actions/manuscript";
 import {
   listCharacters,
   listLocations,
   listStoryBibleEntries,
 } from "@/lib/actions/story-bible";
+import { listSceneCards } from "@/lib/actions/scene-cards";
 import { StoryBibleWorkspace } from "@/components/story-bible/StoryBibleWorkspace";
 
 export default async function StoryBiblePage({
@@ -14,10 +15,12 @@ export default async function StoryBiblePage({
   const { projectId } = await params;
   await getProjectMeta(projectId); // ownership check (layout already fetched this, cheap to repeat)
 
-  const [characters, locations, notes] = await Promise.all([
+  const [characters, locations, notes, chapters, sceneCards] = await Promise.all([
     listCharacters(projectId),
     listLocations(projectId),
     listStoryBibleEntries(projectId),
+    listChapters(projectId),
+    listSceneCards(projectId),
   ]);
 
   return (
@@ -26,6 +29,8 @@ export default async function StoryBiblePage({
       initialCharacters={characters}
       initialLocations={locations}
       initialNotes={notes}
+      initialChapters={chapters}
+      initialSceneCards={sceneCards}
     />
   );
 }

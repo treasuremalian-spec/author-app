@@ -1,25 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { BookMarked, MapPin, Users } from "lucide-react";
+import { BookMarked, LayoutGrid, MapPin, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { CharactersPanel, type CharacterRow } from "./CharactersPanel";
 import { LocationsPanel, type LocationRow } from "./LocationsPanel";
 import { NotesPanel, type NoteRow } from "./NotesPanel";
+import { SceneCardsPanel, type ChapterListItem, type SceneCardRow } from "./SceneCardsPanel";
 
-type Tab = "characters" | "locations" | "notes";
+type Tab = "characters" | "locations" | "notes" | "sceneCards";
 
 export function StoryBibleWorkspace({
   projectId,
   initialCharacters,
   initialLocations,
   initialNotes,
+  initialChapters,
+  initialSceneCards,
 }: {
   projectId: string;
   initialCharacters: CharacterRow[];
   initialLocations: LocationRow[];
   initialNotes: NoteRow[];
+  initialChapters: ChapterListItem[];
+  initialSceneCards: SceneCardRow[];
 }) {
   const [tab, setTab] = useState<Tab>("characters");
 
@@ -27,6 +32,7 @@ export function StoryBibleWorkspace({
     { id: "characters", label: "Characters", icon: Users, count: initialCharacters.length },
     { id: "locations", label: "Locations", icon: MapPin, count: initialLocations.length },
     { id: "notes", label: "Story notes", icon: BookMarked, count: initialNotes.length },
+    { id: "sceneCards", label: "Scene cards", icon: LayoutGrid, count: initialSceneCards.length },
   ];
 
   return (
@@ -59,6 +65,13 @@ export function StoryBibleWorkspace({
           <LocationsPanel projectId={projectId} initialLocations={initialLocations} />
         )}
         {tab === "notes" && <NotesPanel projectId={projectId} initialNotes={initialNotes} />}
+        {tab === "sceneCards" && (
+          <SceneCardsPanel
+            projectId={projectId}
+            initialChapters={initialChapters}
+            initialSceneCards={initialSceneCards}
+          />
+        )}
       </div>
     </div>
   );

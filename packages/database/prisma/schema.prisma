@@ -202,6 +202,7 @@ model Project {
   locations        Location[]
   storyBibleEntries StoryBibleEntry[]
   plotBoardCards   PlotBoardCard[]
+  sceneCards       SceneCard[]
   collaborators    Collaborator[]
   writingGoals     WritingGoal[]
   dailyStats       DailyWritingStat[]
@@ -288,6 +289,11 @@ model ManuscriptNode {
   // its own Scene directly -- the single writing surface, 2026-09-11).
   // Always absent on PART nodes.
   scene Scene?
+
+  // Scene Cards (Story Bible corkboard, 2026-09-11) assigned to this
+  // chapter -- only ever set on CHAPTER nodes; SetNull on delete so a
+  // card survives its chapter being removed (falls back to "Unassigned").
+  sceneCards SceneCard[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -468,6 +474,33 @@ model PlotBoardCard {
 
   @@index([projectId, column, orderIndex])
   @@map("plot_board_cards")
+}
+
+// A short synopsis/note on a draggable index card, assigned to a chapter
+// (or left unassigned) and ordered within it -- the Story Bible
+// "corkboard" (author request, 2026-09-11). Deliberately a separate
+// model from PlotBoardCard above: that one organizes by author-defined
+// column/Act, this one organizes by the manuscript's real chapters and
+// mirrors the binder directly.
+model SceneCard {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Null = sits in the "Unassigned" pool rather than under any chapter.
+  chapterNodeId String?
+  chapterNode   ManuscriptNode? @relation(fields: [chapterNodeId], references: [id], onDelete: SetNull)
+
+  title      String
+  synopsis   String?
+  orderIndex Int
+  colorTag   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, chapterNodeId, orderIndex])
+  @@map("scene_cards")
 }
 
 // ---------------------------------------------------------------------------

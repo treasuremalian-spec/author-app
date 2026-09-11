@@ -93,6 +93,24 @@ export async function getProjectData(projectId: string) {
   return { project, nodes, characters, lastEditedNodeId };
 }
 
+// A lightweight chapter list -- id, title, and which Part (if any) it
+// sits under -- for UI that mirrors the binder's chapter order without
+// needing the whole tree (scenes, word counts, etc). Used by the Story
+// Bible's Scene Cards sidebar (2026-09-11) to keep its chapter list in
+// sync with the real manuscript.
+export async function listChapters(projectId: string) {
+  const user = await requireUser();
+  await assertProjectOwnership(projectId, user.id);
+
+  const nodes = await prisma.manuscriptNode.findMany({
+    where: { projectId, type: { in: ["PART", "CHAPTER"] } },
+    orderBy: { orderIndex: "asc" },
+    select: { id: true, parentId: true, type: true, title: true, orderIndex: true },
+  });
+
+  return nodes;
+}
+
 export async function createNode(input: {
   projectId: string;
   parentId: string | null;

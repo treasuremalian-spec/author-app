@@ -61,3 +61,12 @@ export async function assertSceneInProject(sceneId: string, projectId: string) {
   });
   if (!scene) throw new Error("That scene isn't part of this project.");
 }
+
+/** Throws unless `sceneCardId` is actually a SceneCard belonging to `projectId`. */
+export async function assertSceneCardInProject(sceneCardId: string, projectId: string) {
+  const card = await prisma.sceneCard.findFirst({
+    where: { id: sceneCardId, projectId },
+    select: { id: true },
+  });
+  if (!card) throw new Error("That scene card isn't part of this project.");
+}
