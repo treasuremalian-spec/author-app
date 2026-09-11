@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 // A real, plain-language Terms of Service page (author request, 2026-09-07,
 // alongside the Privacy Policy). Reflects the app as it actually exists
@@ -18,7 +19,7 @@ const GOVERNING_STATE = "New York";
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      <h2 className="font-display text-lg italic text-foreground">{title}</h2>
       <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">{children}</div>
     </section>
   );
@@ -26,16 +27,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function TermsOfServicePage() {
   return (
-    <div className="min-h-screen bg-muted/20 px-6 py-12">
+    <div className="min-h-screen px-6 py-12">
       <div className="mx-auto max-w-2xl space-y-8">
-        <div>
-          <Link href="/login" className="text-sm text-primary underline-offset-4 hover:underline">
-            &larr; Back
-          </Link>
-        </div>
+        <Link
+          href="/login"
+          className="mb-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Back
+        </Link>
 
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">Terms of Service</h1>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Legal</span>
+          <h1 className="font-display text-3xl italic text-foreground">Terms of Service</h1>
           <p className="text-sm text-muted-foreground">
             Effective {EFFECTIVE_DATE}. By creating an account or using this app, you&apos;re agreeing to
             these terms with {OPERATOR_NAME} (&quot;we,&quot; &quot;us&quot;).

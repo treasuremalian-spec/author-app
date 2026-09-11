@@ -102,10 +102,10 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-background p-6 text-center">
+      <div className="border border-border bg-background p-6 text-center">
         {sprint.status === "SCHEDULED" && (
           <>
-            <p className="text-sm text-muted-foreground">Waiting room</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Waiting room</p>
             <p className="mt-1 font-display text-3xl font-semibold">{sprint.durationMinutes} minutes</p>
             {sprint.wordGoal && (
               <p className="mt-1 text-sm text-muted-foreground">Goal: {sprint.wordGoal.toLocaleString()} words</p>
@@ -141,7 +141,7 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
 
         {sprint.status === "ACTIVE" && msRemaining !== null && (
           <>
-            <p className="text-sm text-muted-foreground">Time remaining</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Time remaining</p>
             <p className="mt-1 font-display text-5xl font-semibold tabular-nums">{formatCountdown(msRemaining)}</p>
             {sprint.wordGoal && (
               <p className="mt-1 text-sm text-muted-foreground">Goal: {sprint.wordGoal.toLocaleString()} words</p>
@@ -176,8 +176,8 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
 
         {sprint.status === "COMPLETED" && (
           <>
-            <p className="text-sm text-muted-foreground">Sprint complete</p>
-            <p className="mt-1 font-display text-2xl font-semibold">Nice work!</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Sprint complete</p>
+            <p className="mt-1 font-display text-2xl italic">Nice work!</p>
           </>
         )}
 
@@ -185,14 +185,14 @@ export function SprintRoom({ sprintId, initialSprint }: { sprintId: string; init
       </div>
 
       <div>
-        <h2 className="mb-3 font-display text-base font-semibold">
+        <h2 className="mb-3 font-display text-base italic">
           {sprint.status === "COMPLETED" ? "Results" : "Sprinting"} ({sprint.participants.length})
         </h2>
         <ul className="space-y-2">
           {sprint.participants.map((p, i) => (
             <li
               key={p.userId}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3"
+              className="flex items-center justify-between gap-3 border border-border bg-background p-3"
             >
               <div className="flex min-w-0 items-center gap-3">
                 {sprint.status === "COMPLETED" && i === 0 && p.wordsWritten > 0 ? (

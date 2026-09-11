@@ -60,9 +60,9 @@ export function SprintChat({ sprintId }: { sprintId: string }) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-background">
+    <div className="border border-border bg-background">
       <div className="border-b border-border px-4 py-2.5">
-        <h2 className="font-display text-sm font-semibold">Chat</h2>
+        <h2 className="font-display text-sm italic">Chat</h2>
       </div>
 
       <div ref={listRef} className="max-h-56 space-y-2 overflow-y-auto px-4 py-3">
@@ -76,7 +76,7 @@ export function SprintChat({ sprintId }: { sprintId: string }) {
               {!m.isMe && <p className="px-1 text-xs font-medium text-muted-foreground">{m.displayName}</p>}
               <p
                 className={cn(
-                  "max-w-[85%] rounded-lg px-3 py-1.5 text-sm break-words",
+                  "max-w-[85%] px-3 py-1.5 text-sm break-words",
                   m.isMe ? "bg-primary text-primary-foreground" : "bg-muted"
                 )}
               >
