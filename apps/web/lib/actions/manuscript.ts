@@ -73,7 +73,24 @@ export async function getProjectData(projectId: string) {
     orderBy: { name: "asc" },
   });
 
-  return { project, nodes, characters };
+  // Which SCENE node was actually written in most recently, so the editor
+  // can default-open there instead of always the first scene in tree
+  // order -- "continue where you left off," for both a direct project
+  // open and the library's "Continue writing" link. `nodes` already has
+  // each scene's `updatedAt` loaded via `include: { scene: true }` above,
+  // so this is a plain in-memory reduce, no extra query. Null when the
+  // book has no scenes with any content yet.
+  let lastEditedNodeId: string | null = null;
+  let lastEditedAt: Date | null = null;
+  for (const n of nodes) {
+    if (!n.scene) continue;
+    if (!lastEditedAt || n.scene.updatedAt > lastEditedAt) {
+      lastEditedNodeId = n.id;
+      lastEditedAt = n.scene.updatedAt;
+    }
+  }
+
+  return { project, nodes, characters, lastEditedNodeId };
 }
 
 export async function createNode(input: {
@@ -354,11 +371,25 @@ export async function listProjectsWithStats() {
 
   const withStats = await Promise.all(
     projects.map(async (project) => {
+      // _max: { updatedAt } piggybacks on the same aggregate query as the
+      // word-count sum -- Scene.updatedAt is already maintained for free by
+      // Prisma's @updatedAt on every autosave, so this is a real "last
+      // actually wrote something here" signal (unlike Project.updatedAt,
+      // which only moves when the project ROW itself changes -- title,
+      // status, etc. -- never on a scene autosave) at no extra query cost.
+      // Powers the library's "last edited" sort and its "continue writing"
+      // callout. Null when the book has no scenes yet (a brand-new, still-
+      // empty project).
       const agg = await prisma.scene.aggregate({
         where: { node: { projectId: project.id } },
         _sum: { wordCount: true },
+        _max: { updatedAt: true },
       });
-      return { ...project, currentWordCount: agg._sum.wordCount ?? 0 };
+      return {
+        ...project,
+        currentWordCount: agg._sum.wordCount ?? 0,
+        lastActivityAt: agg._max.updatedAt ?? null,
+      };
     })
   );
 

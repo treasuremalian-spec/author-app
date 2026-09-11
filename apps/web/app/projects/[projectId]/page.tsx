@@ -8,7 +8,7 @@ export default async function ProjectPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { project, nodes, characters } = await getProjectData(projectId);
+  const { project, nodes, characters, lastEditedNodeId } = await getProjectData(projectId);
 
   const mappedNodes: ManuscriptNodeData[] = nodes.map((n) => ({
     id: n.id,
@@ -44,6 +44,7 @@ export default async function ProjectPage({
       projectId={project.id}
       initialNodes={mappedNodes}
       characters={characters}
+      initialSelectedNodeId={lastEditedNodeId}
     />
   );
 }

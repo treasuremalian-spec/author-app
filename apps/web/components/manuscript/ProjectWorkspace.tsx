@@ -29,17 +29,28 @@ interface ProjectWorkspaceProps {
   projectId: string;
   initialNodes: ManuscriptNodeData[];
   characters: { id: string; name: string }[];
+  // The SCENE node with the most recent scene.updatedAt (see
+  // getProjectData in lib/actions/manuscript.ts) -- opening the editor
+  // lands directly back on whatever was actually being written last,
+  // instead of always the first scene in tree order. Null for a brand-new
+  // project with no written scenes yet, or when the referenced node no
+  // longer exists (e.g. deleted since).
+  initialSelectedNodeId?: string | null;
 }
 
 export function ProjectWorkspace({
   projectId,
   initialNodes,
   characters,
+  initialSelectedNodeId,
 }: ProjectWorkspaceProps) {
   const [nodes, setNodes] = useState<ManuscriptNodeData[]>(initialNodes);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
-    initialNodes.find((n) => n.type === "SCENE")?.id ?? null
-  );
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => {
+    const lastEdited = initialSelectedNodeId
+      ? initialNodes.find((n) => n.id === initialSelectedNodeId && n.type === "SCENE")
+      : null;
+    return lastEdited?.id ?? initialNodes.find((n) => n.type === "SCENE")?.id ?? null;
+  });
   const [refreshToken, setRefreshToken] = useState(0);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;

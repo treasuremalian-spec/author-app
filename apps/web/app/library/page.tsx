@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Users, Timer } from "lucide-react";
+import { ArrowRight, BookOpen, Timer, Users } from "lucide-react";
 
 import { listProjectsWithStats } from "@/lib/actions/manuscript";
 import { getMyProfile } from "@/lib/actions/profile";
@@ -7,9 +7,28 @@ import { NewProjectDialog } from "@/components/manuscript/NewProjectDialog";
 import { LibraryWorkspace } from "@/components/library/LibraryWorkspace";
 import { ProfileMenu } from "@/components/profile/ProfileMenu";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
+import { daysRemaining } from "@/lib/writing-progress";
+import { timeAgo } from "@/lib/time";
 
 export default async function LibraryPage() {
   const [projects, { profile }] = await Promise.all([listProjectsWithStats(), getMyProfile()]);
+
+  const totalWords = projects.reduce((sum, p) => sum + p.currentWordCount, 0);
+
+  // Soonest upcoming (not-yet-past) deadline across the whole shelf, for
+  // the stats strip -- a project with no deadline set never surfaces here.
+  const closestDeadline = projects
+    .filter((p) => p.deadline)
+    .map((p) => ({ project: p, remaining: daysRemaining(p.deadline) }))
+    .filter((x): x is { project: (typeof projects)[number]; remaining: number } => x.remaining !== null && x.remaining >= 0)
+    .sort((a, b) => a.remaining - b.remaining)[0];
+
+  // Whichever book had the most recent scene.updatedAt anywhere in it --
+  // powers the "Continue writing" callout below. Null for a brand-new
+  // library with no written scenes anywhere yet.
+  const mostRecent = projects
+    .filter((p) => p.lastActivityAt)
+    .sort((a, b) => new Date(b.lastActivityAt!).getTime() - new Date(a.lastActivityAt!).getTime())[0];
 
   return (
     <div className="min-h-screen">
@@ -60,7 +79,48 @@ export default async function LibraryPage() {
             <NewProjectDialog />
           </div>
         ) : (
-          <LibraryWorkspace projects={projects} />
+          <>
+            {mostRecent && (
+              <Link
+                href={`/projects/${mostRecent.id}`}
+                className="mb-4 flex items-center gap-4 border border-border bg-card p-4 transition-colors hover:border-foreground"
+              >
+                <div className="flex size-11 shrink-0 items-center justify-center border border-border text-foreground">
+                  <BookOpen className="size-4" strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                    Continue writing
+                  </p>
+                  <p className="truncate font-display text-lg italic">{mostRecent.title}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {timeAgo(mostRecent.lastActivityAt!)}
+                </span>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+              </Link>
+            )}
+
+            <div className="mb-8 flex flex-wrap gap-6 border-b border-border pb-6 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              <span>
+                <span className="text-foreground">{projects.length}</span> {projects.length === 1 ? "book" : "books"}{" "}
+                on your shelf
+              </span>
+              <span>
+                <span className="text-foreground">{totalWords.toLocaleString()}</span> words across your library
+              </span>
+              {closestDeadline && (
+                <span className="truncate">
+                  Closest deadline:{" "}
+                  <span className="text-foreground">{closestDeadline.project.title}</span> in{" "}
+                  <span className="text-foreground">{closestDeadline.remaining}</span>{" "}
+                  {closestDeadline.remaining === 1 ? "day" : "days"}
+                </span>
+              )}
+            </div>
+
+            <LibraryWorkspace projects={projects} />
+          </>
         )}
       </main>
     </div>
