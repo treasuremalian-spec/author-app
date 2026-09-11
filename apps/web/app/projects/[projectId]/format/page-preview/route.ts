@@ -70,9 +70,20 @@ function withPagedJs(html: string): string {
 (async function () {
   try {
     await window.PagedPolyfill.preview();
+    // Mirrors render-pdf.ts's own post-pagination tagging pass exactly
+    // (see its comment for the full reasoning) -- ".pagedjs_page_chapter_start"
+    // for the running-header rule, ".pagedjs_page_in_chapter" (2026-09-11)
+    // for background images, which should only ever appear on a real
+    // Chapter page's physical pages (however many that chapter spans),
+    // never a Copyright/Dedication/Prologue/etc. page.
     document.querySelectorAll(".pagedjs_page").forEach(function (pageEl) {
       if (pageEl.querySelector(".pagedjs_area .chapter-start")) {
         pageEl.classList.add("pagedjs_page_chapter_start");
+      }
+      if (
+        pageEl.querySelector(".pagedjs_area .chapter-start.chapter--real, .pagedjs_area .chapter-body.chapter--real")
+      ) {
+        pageEl.classList.add("pagedjs_page_in_chapter");
       }
     });
   } catch (err) {

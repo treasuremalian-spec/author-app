@@ -164,10 +164,29 @@ export async function renderPrintPdf(html: string, pageWidthIn: number, pageHeig
     // the page after pagination finishes rather than before, since only
     // now do real .pagedjs_page boxes (and which original content ended
     // up on which one) actually exist.
+    //
+    // Also tags every physical page whose content belongs to a REAL
+    // Chapter page (not Copyright/Dedication/Prologue/etc.) with
+    // ".pagedjs_page_in_chapter" -- print-html.ts's chapterHtml() marks
+    // such a chapter's .chapter-start div AND a .chapter-body wrapper
+    // (around its actual prose) with "chapter--real", so this catches
+    // both the chapter's first physical page and every continuation page
+    // it spans. See that function's own comment for why this deliberately
+    // is NOT the outer <section> itself (a real render confirmed Paged.js
+    // pre-builds an empty "shadow" clone of the NEXT id'd <section> onto
+    // the CURRENT page, which leaked a class placed there one page
+    // early). See buildCss()'s background-image rules for what actually
+    // reads this (2026-09-11 request: "the background images should only
+    // go on pages that are categorized as a chapter").
     await page.evaluate(() => {
       document.querySelectorAll(".pagedjs_page").forEach((pageEl) => {
         if (pageEl.querySelector(".pagedjs_area .chapter-start")) {
           pageEl.classList.add("pagedjs_page_chapter_start");
+        }
+        if (
+          pageEl.querySelector(".pagedjs_area .chapter-start.chapter--real, .pagedjs_area .chapter-body.chapter--real")
+        ) {
+          pageEl.classList.add("pagedjs_page_in_chapter");
         }
       });
     });

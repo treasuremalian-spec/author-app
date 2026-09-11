@@ -398,6 +398,27 @@ function chapterHtml(
   const titleHtml = showHeading ? `\n    <h1 class="chapter-title">${escapeXml(label)}</h1>${authorHtml}` : "";
   const chapterStartClass = showHeading ? "chapter-start" : "chapter-start chapter-start--untitled";
 
+  // Marks this chapter's title/body as belonging to a REAL Chapter page
+  // (not Copyright/Dedication/Prologue/etc.), so render-pdf.ts's and the
+  // Page Preview route's post-pagination JS pass can tag every physical
+  // page that actually belongs to a chapter with .pagedjs_page_in_chapter
+  // -- see that tagging code and buildCss()'s background-image rules
+  // below for what reads it.
+  //
+  // Deliberately applied to the .chapter-start div and a new .chapter-
+  // body wrapper below, NOT the outer id'd <section> itself -- confirmed
+  // via a real render (2026-09-11) that Paged.js pre-builds an EMPTY
+  // "shadow" clone of the NEXT top-level id'd <section> onto the CURRENT
+  // physical page (almost certainly so it can resolve id-anchored CSS
+  // features like target-counter(), which this book's print Contents
+  // page already relies on, ahead of actually reaching that content) --
+  // a class placed directly on the id'd <section> leaked one page early
+  // as a result. The .chapter-start div and this new .chapter-body div
+  // are both plain, non-id'd, actually-flowed content, the same
+  // granularity Paged.js already paginates by, so neither one suffers
+  // this early-shadow problem (confirmed the same way).
+  const chapterTypeClass = chapter.pageType === "CHAPTER" ? " chapter--real" : "";
+
   // Chapter-start background SPREAD (PrintOptions.backgroundImageChapterStartSpread,
   // 2026-09-11) -- an otherwise-blank verso page carrying the left half of
   // the spread photo, placed right before this chapter's own <section>,
@@ -422,9 +443,9 @@ function chapterHtml(
   // plain "#chapter-N" fragment against this id, resolved by Paged.js's
   // target-counter() and by the browser's own native in-page navigation).
   return `${spreadVersoHtml}<section class="chapter" id="${id}">${spreadRightImgHtml}
-  <div class="${chapterStartClass}">${titleHtml}
+  <div class="${chapterStartClass}${chapterTypeClass}">${titleHtml}
   </div>
-  ${markedScenesHtml}
+  <div class="chapter-body${chapterTypeClass}">${markedScenesHtml}</div>
 </section>`;
 }
 
@@ -686,8 +707,21 @@ ${
    asked, reasonably, for a manual light/dark TEXT choice instead of
    always dimming her image, so the photo now always renders at its own
    true strength and backgroundImageTextColor below picks a legible text
-   color to go with it instead). */
-.pagedjs_page {
+   color to go with it instead).
+
+   Follow-up, 2026-09-11: "the background images should only go on pages
+   that are categorized as a chapter" -- "every_page" used to mean every
+   physical page of the WHOLE book, including Copyright/Dedication/
+   Prologue/Acknowledgments/etc. pages, which she doesn't want. Scoped to
+   ".pagedjs_page_in_chapter" -- a second marker class (alongside the
+   pre-existing ".pagedjs_page_chapter_start" below) that render-pdf.ts's
+   and the Page Preview route's post-pagination JS pass adds to every
+   physical page whose content includes a real chapter's .chapter-start
+   or .chapter-body (both carry "chapter--real" only when chapter.
+   pageType === "CHAPTER", see chapterHtml() above) -- so a physical page
+   gets this background only when it's genuinely part of a real chapter,
+   however many physical pages that chapter actually spans. */
+.pagedjs_page.pagedjs_page_in_chapter {
   background-image: url(${backgroundImageDataUri}) !important;
   background-size: cover !important;
   background-position: center !important;
@@ -709,7 +743,7 @@ ${
    wash here either, for the same reason as "every_page" above.
    (Skipped entirely when backgroundImageChapterStartSpread is also on --
    that variant paints its own split image instead, see below.) */
-.pagedjs_page_chapter_start {
+.pagedjs_page_chapter_start.pagedjs_page_in_chapter {
   background-image: url(${backgroundImageDataUri}) !important;
   background-size: cover !important;
   background-position: center !important;
@@ -820,7 +854,7 @@ ${
    box (confirmed by the pre-existing ".pagedjs_page_chapter_start
    .pagedjs_margin-top-center" visibility rule above, which relies on the
    exact same DOM relationship). */
-.pagedjs_page, .pagedjs_page * {
+.pagedjs_page.pagedjs_page_in_chapter, .pagedjs_page.pagedjs_page_in_chapter * {
   color: #fff !important;
 }
 `
@@ -831,7 +865,7 @@ ${
     ? `/* White text for a dark chapter-start background photo -- same
    mechanism and reasoning as "every_page" above, scoped to just the
    chapter-opening page box. */
-.pagedjs_page_chapter_start, .pagedjs_page_chapter_start * {
+.pagedjs_page_chapter_start.pagedjs_page_in_chapter, .pagedjs_page_chapter_start.pagedjs_page_in_chapter * {
   color: #fff !important;
 }
 `
@@ -1494,7 +1528,21 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     .map((item) =>
       item.kind === "part"
         ? partDividerHtml(item.part!, item.id)
-        : chapterHtml(item.chapter!, item.chapterNumber, item.id, ctx, resolved.showChapterTitles, backgroundSpreadDataUri)
+        : chapterHtml(
+            item.chapter!,
+            item.chapterNumber,
+            item.id,
+            ctx,
+            resolved.showChapterTitles,
+            // Background images (both this spread variant and the plain
+            // every_page/chapter_start modes in buildCss() below) only
+            // belong on real Chapter pages (2026-09-11 request: "the
+            // background images should only go on pages that are
+            // categorized as a chapter") -- a Copyright/Dedication/
+            // Prologue/etc. page never gets one, same scoping rule
+            // already applied to drop caps.
+            item.chapter!.pageType === "CHAPTER" ? backgroundSpreadDataUri : null
+          )
     )
     .join("\n");
 

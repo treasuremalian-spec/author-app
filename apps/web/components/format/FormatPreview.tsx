@@ -42,16 +42,22 @@ export interface PreviewOptions {
    * approximates it, since a real PDF page and this continuously-scrolled
    * preview aren't the same shape (see backgroundImageMode below). */
   backgroundImageUrl: string | null;
-  /** Mirrors PrintOptions.backgroundImageMode (print-html.ts). "every_page"
-   * paints the background behind the whole scrollable preview window,
-   * which is the closest single-page-shaped stand-in this preview has for
-   * "every page of the real PDF." "chapter_start" can't be shown the same
-   * way a real paginated PDF shows it (this preview has no discrete
-   * pages) -- instead each chapter gets one page-shaped band, sized to
-   * the chosen trim's real aspect ratio, with the background image behind
-   * just its opening title, then the chapter's normal (background-free)
-   * body text continues below it -- an honest approximation of "only the
-   * first page of this chapter," not a literal pagination. */
+  /** Mirrors PrintOptions.backgroundImageMode (print-html.ts). Both modes
+   * only ever apply to real Chapter-type chapters (2026-09-11: "the
+   * background images should only go on pages that are categorized as a
+   * chapter") -- a Copyright/Dedication/Prologue/Epilogue/Acknowledgments/
+   * etc. chapter never gets one, mirroring print-html.ts's real
+   * ".pagedjs_page_in_chapter" scoping. "every_page" paints the background
+   * behind each real chapter's own section as you scroll through it (the
+   * closest per-chapter stand-in this continuously-scrolled preview has
+   * for "every physical page of that chapter in the real PDF"). "chapter_
+   * start" can't be shown the same way a real paginated PDF shows it
+   * (this preview has no discrete pages) -- instead each real chapter
+   * gets one page-shaped band, sized to the chosen trim's real aspect
+   * ratio, with the background image behind just its opening title, then
+   * the chapter's normal (background-free) body text continues below it
+   * -- an honest approximation of "only the first page of this chapter,"
+   * not a literal pagination. */
   backgroundImageMode: "none" | "every_page" | "chapter_start";
   /** Mirrors PrintOptions.backgroundImageTextColor (print-html.ts).
    * Author-chosen (request 2026-09-08) in place of the earlier automatic
@@ -137,20 +143,13 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
     paddingRight: `${(marginRightIn / widthIn) * 100}%`,
     overflowY: "auto",
     overflowX: "hidden",
-    ...(showEveryPageBackground
-      ? {
-          // The photo itself, at full strength -- no dimming layer.
-          // Legibility is the author's own call now (backgroundImageTextColor
-          // below), per request 2026-09-08 ("instead of lighten the
-          // background make an option to have text black or white"),
-          // replacing the earlier automatic white wash.
-          backgroundImage: `url(${options.backgroundImageUrl})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          color: options.backgroundImageTextColor === "light" ? "#fff" : undefined,
-        }
-      : {}),
+    // "every_page" background used to paint here, on the whole scrollable
+    // window -- moved to per-chapter below (2026-09-11: "the background
+    // images should only go on pages that are categorized as a chapter"),
+    // since this single outer container has no way to exclude the
+    // Copyright/Dedication/Prologue/etc. pages mixed in among real
+    // chapters. See the per-chapter chapterBackgroundStyle below, which
+    // mirrors print-html.ts's real ".pagedjs_page_in_chapter" scoping.
   };
 
   const bodyStyle: CSSProperties = {
@@ -185,6 +184,22 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
           {data ? (
             chapters.map((chapter, index) => {
               const showHeading = chapter.showHeadingOverride ?? options.showChapterTitles;
+              // Background images only belong on real Chapter pages, never
+              // Copyright/Dedication/Prologue/Epilogue/Acknowledgments/etc.
+              // (2026-09-11 request) -- mirrors print-html.ts's real
+              // ".pagedjs_page_in_chapter" scoping (chapterTypeClass there),
+              // same "CHAPTER only" rule already applied to drop caps.
+              const chapterHasRealBackground = chapter.pageType === "CHAPTER";
+              const chapterBackgroundStyle: CSSProperties | undefined =
+                showEveryPageBackground && chapterHasRealBackground
+                  ? {
+                      backgroundImage: `url(${options.backgroundImageUrl})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      backgroundRepeat: "no-repeat",
+                      color: options.backgroundImageTextColor === "light" ? "#fff" : undefined,
+                    }
+                  : undefined;
               const authorLine = chapter.chapterAuthor?.trim() ? (
                 <p className="format-preview-page__author">by {chapter.chapterAuthor.trim()}</p>
               ) : null;
@@ -207,8 +222,9 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                 className={`format-preview-page__chapter${
                   index > 0 && !partDivider ? " format-preview-page__chapter--break" : ""
                 }`}
+                style={chapterBackgroundStyle}
               >
-                {showChapterStartBackground ? (
+                {showChapterStartBackground && chapterHasRealBackground ? (
                   <div
                     className="format-preview-page__chapter-start-band"
                     style={{
