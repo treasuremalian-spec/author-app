@@ -15,7 +15,7 @@ import { ArrowLeft } from "lucide-react";
 // payments actually go live -- it currently accurately says there's no
 // billing yet.
 
-const EFFECTIVE_DATE = "September 7, 2026";
+const EFFECTIVE_DATE = "September 11, 2026";
 const CONTACT_EMAIL = "TheWriteHERsCorner@gmail.com";
 const OPERATOR_NAME = "WriteHERs Corner";
 
@@ -111,14 +111,29 @@ export default function PrivacyPolicyPage() {
           </p>
         </Section>
 
+        <Section title="Cookies">
+          <p>
+            We use exactly one cookie: a login session cookie set by our authentication provider
+            (Supabase) that keeps you signed in as you move around the app. It&apos;s strictly
+            necessary for the app to work -- without it, you&apos;d have to log in again on every
+            page.
+          </p>
+          <p>
+            We don&apos;t use any analytics, advertising, or tracking cookies, and we don&apos;t use
+            cookies to build a profile of you or share your activity with advertisers. If that ever
+            changes, we&apos;ll update this section and, where required, ask for your consent first.
+          </p>
+        </Section>
+
         <Section title="Your choices &amp; rights">
           <p>You can review and update your profile information directly in the app at any time.</p>
           <p>
-            To request a copy of your data, or to have your account and its content permanently deleted,
-            email <a className="text-primary underline-offset-4 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
-            We&apos;ll confirm your identity and handle the request as quickly as we can. (A fully
-            self-serve &quot;delete my account&quot; button isn&apos;t built yet -- until it is, this email
-            is the reliable way to make that happen.)
+            You can permanently delete your account and everything in it at any time from your
+            profile page (look for &quot;Delete your account&quot; under the Danger Zone) -- this
+            removes your projects, manuscripts, story bible entries, uploaded files, and your login
+            itself, immediately and irreversibly. If you&apos;d rather we handle it for you, or you
+            want a copy of your data first, email{" "}
+            <a className="text-primary underline-offset-4 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
         </Section>
 
