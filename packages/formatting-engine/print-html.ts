@@ -164,6 +164,25 @@ export interface PrintOptions {
    * image and "dark text" for a light one, and gets the photo at its own
    * true strength either way -- no automatic dimming. */
   backgroundImageTextColor?: "dark" | "light";
+  /** Show the chapter-start background image as a real TWO-PAGE SPREAD --
+   * one continuous photo split across the page immediately before a
+   * chapter opens (a blank verso/left-hand page, otherwise unused) and
+   * the chapter's own opening (recto/right-hand) page, the way a real
+   * illustrated book's chapter openers work -- rather than the photo
+   * appearing only behind the single chapter-start page. Author request,
+   * 2026-09-11: "the double spread is supposed to be an option for the
+   * image behind the first page of the chapter" (clarifying that the
+   * double-page-spread concept she wanted applies to THIS book-wide
+   * background-image feature, not only to an inline manuscriptImage the
+   * author places by hand -- see ManuscriptImageDisplayMode's own
+   * separate "spread-double" mode, which she confirmed she ALSO still
+   * wants kept as its own thing). Only meaningful when backgroundImageMode
+   * is "chapter_start" (ignored for "none"/"every_page" -- there's no
+   * single "chapter opening" moment for either of those to spread
+   * across). Every chapter is forced onto a fresh two-page spread when
+   * this is on, regardless of chapterStartsOnRight, since a facing-page
+   * spread inherently requires the chapter to land on a recto page. */
+  backgroundImageChapterStartSpread?: boolean;
 }
 
 const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
@@ -175,6 +194,7 @@ const DEFAULT_PRINT_OPTIONS: Required<PrintOptions> = {
   showChapterTitles: true,
   backgroundImageMode: "none",
   backgroundImageTextColor: "dark",
+  backgroundImageChapterStartSpread: false,
 };
 
 function sceneHtml(content: unknown, isFirstNonEmptyInChapter: boolean, ctx?: RenderContext): string {
@@ -279,7 +299,13 @@ function markChapterFirstParagraph(html: string): string {
   return `${before}${newOpenTag}${leadingTags}<span class="chapter-drop-cap">${firstUnit}</span>${rest}`;
 }
 
-function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx: RenderContext | undefined, showChapterTitles: boolean): string {
+function chapterHtml(
+  chapter: EpubChapter,
+  chapterNumber: number,
+  ctx: RenderContext | undefined,
+  showChapterTitles: boolean,
+  backgroundSpreadDataUri: string | null
+): string {
   const label = chapter.title?.trim() || `Chapter ${chapterNumber}`;
   let seenFirstScene = false;
   const scenesHtml = chapter.scenes
@@ -299,7 +325,25 @@ function chapterHtml(chapter: EpubChapter, chapterNumber: number, ctx: RenderCon
   const titleHtml = showChapterTitles ? `\n    <h1 class="chapter-title">${escapeXml(label)}</h1>` : "";
   const chapterStartClass = showChapterTitles ? "chapter-start" : "chapter-start chapter-start--untitled";
 
-  return `<section class="chapter">
+  // Chapter-start background SPREAD (PrintOptions.backgroundImageChapterStartSpread,
+  // 2026-09-11) -- an otherwise-blank verso page carrying the left half of
+  // the spread photo, placed right before this chapter's own <section>,
+  // plus a plain marker <img> as that section's very first child carrying
+  // the right half (see buildCss's ".chapter-bg-spread-*" rules for the
+  // actual split/bleed geometry -- this function only decides WHERE the
+  // two halves land in the document's flow, since Paged.js paginates by
+  // walking this same flow). Both are position: absolute in the final
+  // CSS, so neither one visually displaces the real chapter-start
+  // title/text that follows -- they only need to exist in the right
+  // place in the DOM for Paged.js to slice them onto the right page.
+  const spreadVersoHtml = backgroundSpreadDataUri
+    ? `<div class="chapter-bg-spread-verso"><img class="chapter-bg-spread-verso-img" src="${escapeXml(backgroundSpreadDataUri)}" alt=""/></div>\n`
+    : "";
+  const spreadRightImgHtml = backgroundSpreadDataUri
+    ? `\n  <img class="chapter-bg-spread-right-img" src="${escapeXml(backgroundSpreadDataUri)}" alt=""/>`
+    : "";
+
+  return `${spreadVersoHtml}<section class="chapter">${spreadRightImgHtml}
   <div class="${chapterStartClass}">${titleHtml}
   </div>
   ${markedScenesHtml}
@@ -310,12 +354,13 @@ function partHtml(
   part: EpubPart,
   chapterNumberStart: number,
   ctx: RenderContext | undefined,
-  showChapterTitles: boolean
+  showChapterTitles: boolean,
+  backgroundSpreadDataUri: string | null
 ): { html: string; nextChapterNumber: number } {
   let chapterNumber = chapterNumberStart;
   const chaptersHtml = part.chapters
     .map((chapter) => {
-      const html = chapterHtml(chapter, chapterNumber, ctx, showChapterTitles);
+      const html = chapterHtml(chapter, chapterNumber, ctx, showChapterTitles, backgroundSpreadDataUri);
       chapterNumber += 1;
       return html;
     })
@@ -353,7 +398,16 @@ function buildCss(
   const { widthIn, heightIn } = resolvePageDimensions(trimSize, bleedActive);
   const width = `${widthIn}in`;
   const height = `${heightIn}in`;
-  const { mirroredMargins, indentParagraphs, lineSpacing, dropCaps, chapterStartsOnRight, backgroundImageMode, backgroundImageTextColor } = options;
+  const {
+    mirroredMargins,
+    indentParagraphs,
+    lineSpacing,
+    dropCaps,
+    chapterStartsOnRight,
+    backgroundImageMode,
+    backgroundImageTextColor,
+    backgroundImageChapterStartSpread,
+  } = options;
   const bleed = bleedActive ? BLEED_IN : 0;
 
   // Base margins (top/right/bottom/left), used as-is when mirroredMargins
@@ -574,7 +628,7 @@ ${
     : ""
 }
 ${
-  backgroundImageDataUri && backgroundImageMode === "chapter_start"
+  backgroundImageDataUri && backgroundImageMode === "chapter_start" && !backgroundImageChapterStartSpread
     ? `/* Book-wide background image, behind only each chapter's OPENING
    page -- reuses the exact same real per-page marker render-pdf.ts
    already tags for hiding the running header on a chapter's first page
@@ -583,12 +637,101 @@ ${
    the same way as "every_page" above -- pixel-sampled a real paginated,
    multi-chapter render and confirmed the background shows on exactly the
    two .pagedjs_page_chapter_start pages and nowhere else. No automatic
-   wash here either, for the same reason as "every_page" above. */
+   wash here either, for the same reason as "every_page" above.
+   (Skipped entirely when backgroundImageChapterStartSpread is also on --
+   that variant paints its own split image instead, see below.) */
 .pagedjs_page_chapter_start {
   background-image: url(${backgroundImageDataUri}) !important;
   background-size: cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
+}
+`
+    : ""
+}
+${
+  backgroundImageDataUri && backgroundImageMode === "chapter_start" && backgroundImageChapterStartSpread
+    ? `/* Chapter-start background as a real TWO-PAGE SPREAD (author
+   request, 2026-09-11: "the double spread is supposed to be an option
+   for the image behind the first page of the chapter") -- ONE photo
+   split across the otherwise-blank verso page right before a chapter
+   opens and the chapter's own recto opening page, reading as one
+   continuous image when the book is held open, exactly like a real
+   illustrated book's chapter-opener spreads.
+
+   chapterHtml() (see there) emits, for each chapter: a
+   ".chapter-bg-spread-verso" wrapper div immediately BEFORE the
+   chapter's <section>, forced onto a verso page via break-before below,
+   and a plain marker <img class="chapter-bg-spread-right-img"> as that
+   <section>'s very first child -- landing on the SAME page as the
+   chapter's own .chapter-start once Paged.js paginates, confirmed via a
+   real render (2026-09-11) that an absolutely-positioned, zero-flow-
+   height element at the start of a multi-page section is sliced onto
+   that section's FIRST page fragment, same as any other content there.
+   Since the verso spacer forces its own page to verso and the chapter's
+   .chapter-start still gets its own fresh-page break right after it
+   (chapterBreak above, "page" or "recto" per chapterStartsOnRight --
+   either way, the page immediately following a forced verso page is
+   ALWAYS recto by binding math, so this works regardless of that
+   separate setting), the two halves always land on the same physical
+   spread. No extra "force recto" logic needed here for that reason.
+
+   THE SPLIT ITSELF -- two different techniques for two different DOM
+   shapes:
+   - .chapter-bg-spread-verso is the ONLY content on its page (like
+     .manuscript-image-figure--spread-double-left), so it can just BE
+     the full bled page (bleed-escaped via negative margin, exactly like
+     spreadDoubleBleedCss below) and hold a plain percentage-sized
+     sliding-window <img> inside it (200% width / 100% height, left
+     half showing at left:0) -- the same proven technique, just under a
+     different class name since this is a separate feature.
+   - .chapter-bg-spread-right-img can't do that -- it has to coexist on
+     its page with the chapter's REAL title and body text, not replace
+     them. It's position: absolute with z-index: -1 (paints behind
+     normal in-flow content -- confirmed via a real render, including
+     that the image stays fully visible rather than getting swallowed by
+     some ancestor's own opaque background: Paged.js's own
+     ".pagedjs_page_content" wrapper is the nearest position:relative
+     ancestor around our own content, and it turns out to be exactly the
+     page's MARGIN/CONTENT box, not the full physical page -- confirmed
+     by direct measurement, not assumed -- so top/left are absolute inch
+     offsets that escape back out to the true page edge (mirroring the
+     negative-margin bleed escape used everywhere else in this file, just
+     expressed as position offsets instead of margin since this element
+     is out of flow) PLUS one extra full page-width added to "left" to
+     slide the (double-page-wide) virtual canvas over by exactly one
+     page, revealing its right half -- the same arithmetic as the
+     percentage-based 200%/-100% trick above, just worked out in
+     absolute inches since there's no already-page-sized ancestor to
+     take percentages of here. Both halves resolve to the IDENTICAL
+     pixel dimensions for their shared virtual canvas (confirmed by
+     comparing the math, not just eyeballing it), so the crop lines up
+     across the gutter same as the manuscriptImage version below. */
+.chapter-bg-spread-verso {
+  break-before: verso;
+  break-after: page;
+  margin: -${marginTopIn}in -${rightInside}in -${marginBottomIn}in -${rightOutside}in;
+  width: calc(100% + ${rightOutside + rightInside}in);
+  height: ${height};
+  overflow: hidden;
+  position: relative;
+}
+.chapter-bg-spread-verso-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  object-fit: cover;
+}
+.chapter-bg-spread-right-img {
+  position: absolute;
+  top: -${marginTopIn}in;
+  left: -${(rightInside + widthIn).toFixed(4)}in;
+  width: ${(widthIn * 2).toFixed(4)}in;
+  height: ${height};
+  object-fit: cover;
+  z-index: -1;
 }
 `
     : ""
@@ -956,8 +1099,30 @@ ${
      after this element flows onto the SAME page as the title, exactly
      like a real printed book -- confirmed 2026-09-06 via a real local
      render (previously the title always got a page entirely to itself,
-     with body text starting on the page after). */
-  break-before: ${chapterBreak};
+     with body text starting on the page after).
+
+     EXCEPTION -- backgroundImageChapterStartSpread (2026-09-11): when
+     that option is on, forcing break-before here is actively WRONG, not
+     just redundant. CSS forced breaks (page/recto/verso) are unconditional
+     -- they always insert a break, even from the very top of a fresh
+     page/fragmentainer. Every chapter already gets its own guaranteed
+     fresh recto page from the ".chapter-bg-spread-verso" spacer right
+     before it (forced break-before:verso + break-after:page -- and a
+     forced-verso page is always immediately followed by a recto page by
+     binding math), with the recto's marker
+     "<img class=chapter-bg-spread-right-img>" as literally the first
+     thing in that page's content. Confirmed via a real render (2026-09-11)
+     that leaving break-before:${chapterBreak} here ALSO fires, splitting
+     the chapter onto a THIRD page -- the marker image lands on the
+     guaranteed-recto page as intended, but the real .chapter-start title
+     then force-breaks onto the page after THAT, decoupling the title from
+     the image it's supposed to sit on top of. "avoid" (not simply
+     omitting the property, whose initial value is "auto") reliably
+     suppresses that extra forced break while still letting normal
+     content-overflow pagination happen if this chapter's body text is
+     long enough to need it -- the same trade every other break-avoiding
+     rule in this file already makes. */
+  break-before: ${backgroundImageChapterStartSpread ? "avoid" : chapterBreak};
   padding-top: 1.6in;
   text-align: center;
 }
@@ -1005,19 +1170,31 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     showChapterTitles: options.showChapterTitles ?? DEFAULT_PRINT_OPTIONS.showChapterTitles,
     backgroundImageMode: options.backgroundImageMode ?? DEFAULT_PRINT_OPTIONS.backgroundImageMode,
     backgroundImageTextColor: options.backgroundImageTextColor ?? DEFAULT_PRINT_OPTIONS.backgroundImageTextColor,
+    backgroundImageChapterStartSpread:
+      options.backgroundImageChapterStartSpread ?? DEFAULT_PRINT_OPTIONS.backgroundImageChapterStartSpread,
   };
-
-  const bleedActive = bookHasSpreadImage(book.sections);
 
   // Same embed-as-data-URI reasoning as the inline manuscriptImage ctx
   // below -- a single in-memory HTML string has nowhere else to point a
   // background-image url() at. null (no image uploaded, or its fetch
   // failed at export time) simply means the CSS rules in buildCss below
   // render nothing, same fail-soft behavior as every other image in this
-  // pipeline.
+  // pipeline. Computed before bleedActive (unlike before 2026-09-11)
+  // since the chapter-start SPREAD variant now needs to know whether
+  // there's really an image before deciding bleed applies.
   const backgroundImageDataUri = book.backgroundImage
     ? `data:${book.backgroundImage.mimeType};base64,${Buffer.from(book.backgroundImage.bytes).toString("base64")}`
     : null;
+
+  // A chapter-start background SPREAD needs the same true-physical-edge
+  // bleed as a manuscriptImage "spread"/"spread-double" -- it's just as
+  // much a full-bleed photo, only driven by the book-wide background
+  // image setting instead of an inline image the author placed by hand.
+  const bleedActive =
+    bookHasSpreadImage(book.sections) ||
+    (resolved.backgroundImageMode === "chapter_start" &&
+      resolved.backgroundImageChapterStartSpread &&
+      !!backgroundImageDataUri);
 
   // Images are embedded as data: URIs -- a single in-memory HTML string
   // (which is all Paged.js/Puppeteer render from, see render-pdf.ts) has
@@ -1040,15 +1217,24 @@ export function buildPrintHtml(book: PrintBookInput, options: PrintOptions = {})
     supportsFacingPages: true,
   };
 
+  // Only pass a real data URI through to chapterHtml/partHtml (and so
+  // only emit the spread verso/marker-img HTML at all) when the spread
+  // variant is actually selected AND there's really an image uploaded --
+  // otherwise every chapter would grow a silently-unused blank verso page.
+  const backgroundSpreadDataUri =
+    resolved.backgroundImageMode === "chapter_start" && resolved.backgroundImageChapterStartSpread
+      ? backgroundImageDataUri
+      : null;
+
   let chapterNumber = 1;
   const sectionsHtml = book.sections
     .map((section: EpubSection) => {
       if (section.kind === "part") {
-        const result = partHtml(section.part, chapterNumber, ctx, resolved.showChapterTitles);
+        const result = partHtml(section.part, chapterNumber, ctx, resolved.showChapterTitles, backgroundSpreadDataUri);
         chapterNumber = result.nextChapterNumber;
         return result.html;
       }
-      const html = chapterHtml(section.chapter, chapterNumber, ctx, resolved.showChapterTitles);
+      const html = chapterHtml(section.chapter, chapterNumber, ctx, resolved.showChapterTitles, backgroundSpreadDataUri);
       chapterNumber += 1;
       return html;
     })

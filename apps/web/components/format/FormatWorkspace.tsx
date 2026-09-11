@@ -45,6 +45,16 @@ interface PrintOptionsState {
    * the text color herself). Only meaningful when backgroundImageMode
    * isn't "none". */
   backgroundImageTextColor: "dark" | "light";
+  /** Only meaningful when backgroundImageMode is "chapter_start". Shows
+   * the SAME background photo as a real two-page spread -- split across
+   * the blank page right before a chapter opens and the chapter's own
+   * opening page, one continuous image -- rather than only behind the
+   * single chapter-start page. Author request, 2026-09-11 (clarifying
+   * that an earlier "double spread" feature she'd asked for was actually
+   * about this background-image option, not the separate inline
+   * manuscript-image spread mode, which she confirmed she still wants
+   * kept as its own thing). */
+  backgroundImageChapterStartSpread: boolean;
 }
 
 const DEFAULT_OPTIONS: PrintOptionsState = {
@@ -56,6 +66,7 @@ const DEFAULT_OPTIONS: PrintOptionsState = {
   lineSpacing: "1.5",
   backgroundImageMode: "none",
   backgroundImageTextColor: "dark",
+  backgroundImageChapterStartSpread: false,
 };
 
 function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsState): string {
@@ -69,6 +80,7 @@ function buildPdfHref(projectId: string, trim: TrimSize, options: PrintOptionsSt
     lineSpacing: options.lineSpacing,
     backgroundImageMode: options.backgroundImageMode,
     backgroundImageTextColor: options.backgroundImageTextColor,
+    backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread ? "1" : "0",
   });
   return `/projects/${projectId}/export/pdf?${params.toString()}`;
 }
@@ -212,6 +224,22 @@ export function FormatWorkspace({
                       </select>
                     </div>
                   )}
+                  {backgroundImageUrl && options.backgroundImageMode === "chapter_start" && (
+                    <label className="mt-2 flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 rounded border-input"
+                        checked={options.backgroundImageChapterStartSpread}
+                        onChange={() =>
+                          setOptions((prev) => ({
+                            ...prev,
+                            backgroundImageChapterStartSpread: !prev.backgroundImageChapterStartSpread,
+                          }))
+                        }
+                      />
+                      Spread across two facing pages (the blank page before the chapter, plus its opening page)
+                    </label>
+                  )}
                   {backgroundImageUrl && options.backgroundImageMode !== "none" && (
                     <div className="mt-2 flex items-center gap-2">
                       <Label htmlFor="background-image-text-color" className="text-sm font-normal text-foreground">
@@ -325,6 +353,7 @@ export function FormatWorkspace({
             backgroundImageUrl,
             backgroundImageMode: options.backgroundImageMode,
             backgroundImageTextColor: options.backgroundImageTextColor,
+            backgroundImageChapterStartSpread: options.backgroundImageChapterStartSpread,
           }}
         />
       </div>

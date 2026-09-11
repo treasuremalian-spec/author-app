@@ -58,6 +58,18 @@ export interface PreviewOptions {
    * whether the overlaid text reads dark (normal) or light/white. Only
    * meaningful when backgroundImageMode isn't "none". */
   backgroundImageTextColor: "dark" | "light";
+  /** Mirrors PrintOptions.backgroundImageChapterStartSpread (print-html.ts).
+   * Only meaningful when backgroundImageMode is "chapter_start". The real
+   * PDF splits the photo across two facing physical pages (the blank page
+   * before a chapter, plus its opening page) -- this continuously-scrolled
+   * preview has no facing pages to split across, so it approximates the
+   * idea honestly instead of faking the split: the same chapter-start band
+   * simply renders at a real two-PAGE-WIDE aspect ratio (still one
+   * unsplit photo, via background-size: cover), reading as "this image
+   * spans a spread" without pretending to show actual pagination -- same
+   * "honest approximation, not literal pagination" approach the rest of
+   * this file already takes for backgroundImageMode itself. */
+  backgroundImageChapterStartSpread: boolean;
 }
 
 // Mirrors print-html.ts's buildCss() margin constants (non-bleed values --
@@ -136,7 +148,16 @@ export function FormatPreview({ data, options }: { data: FormatPreviewData | nul
                   <div
                     className="format-preview-page__chapter-start-band"
                     style={{
-                      aspectRatio: `${widthIn} / ${heightIn}`,
+                      // Spread mode widens the band to a real two-page-wide
+                      // aspect ratio (same photo, via background-size:
+                      // cover below) -- an honest stand-in for "this image
+                      // spans a facing-page spread in the real PDF" (see
+                      // backgroundImageChapterStartSpread's doc comment
+                      // above for why this preview doesn't attempt the
+                      // actual split).
+                      aspectRatio: options.backgroundImageChapterStartSpread
+                        ? `${widthIn * 2} / ${heightIn}`
+                        : `${widthIn} / ${heightIn}`,
                       // The photo itself, at full strength -- no dimming
                       // layer. The chapter title's own color (dark by
                       // default, or white -- see backgroundImageTextColor

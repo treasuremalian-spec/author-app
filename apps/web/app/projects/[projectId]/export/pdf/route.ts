@@ -54,6 +54,7 @@ function parsePrintOptions(searchParams: URLSearchParams): PrintOptions {
     showChapterTitles: parseBoolParam(searchParams.get("showChapterTitles")),
     backgroundImageMode: parseBackgroundImageMode(searchParams.get("backgroundImageMode")),
     backgroundImageTextColor: parseBackgroundImageTextColor(searchParams.get("backgroundImageTextColor")),
+    backgroundImageChapterStartSpread: parseBoolParam(searchParams.get("backgroundImageChapterStartSpread")),
     lineSpacing: parseLineSpacing(searchParams.get("lineSpacing")),
   };
 }
