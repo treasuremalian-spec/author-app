@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; deleted?: string }>;
 }) {
   const params = await searchParams;
 
@@ -32,6 +32,11 @@ export default async function LoginPage({
           </CardHeader>
           <CardContent>
             <form action={signIn} className="space-y-4">
+              {params.deleted === "1" && (
+                <p className="border border-border bg-muted/50 p-3 text-sm text-foreground">
+                  Your account has been permanently deleted.
+                </p>
+              )}
               {params.error && (
                 <p className="border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                   {params.error}

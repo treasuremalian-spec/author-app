@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { getMyProfile } from "@/lib/actions/profile";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { DeleteAccountCard } from "@/components/profile/DeleteAccountCard";
 import { PresenceHeartbeat } from "@/components/presence/PresenceHeartbeat";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -51,6 +52,8 @@ export default async function ProfilePage({
             />
           </CardContent>
         </Card>
+
+        <DeleteAccountCard />
       </div>
     </div>
   );
